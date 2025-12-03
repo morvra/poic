@@ -21,7 +21,8 @@ import {
   Square,
   AlertTriangle,
   Tag,
-  Cloud
+  Cloud,
+  RefreshCw
 } from 'lucide-react';
 
 // Enhanced initial data with 10 varied cards
@@ -35,7 +36,93 @@ const INITIAL_CARDS: Card[] = [
     updatedAt: Date.now(),
     stacks: ['Journal']
   },
-  // ... (Keep existing initial cards or load from storage)
+  {
+    id: '9',
+    type: CardType.GTD,
+    title: 'PR #402 のレビュー',
+    body: 'モバイルデバイスでの新しいサイドバー実装のレスポンシブ動作を確認する。',
+    createdAt: Date.now() - 3600000,
+    updatedAt: Date.now(),
+    dueDate: Date.now() + 86400000, // Tomorrow
+    completed: false,
+    stacks: ['Project Alpha']
+  },
+  {
+    id: '8',
+    type: CardType.Discovery,
+    title: 'デジタルの触感',
+    body: 'アイデア: モバイルでカードをドラッグする時に触覚フィードバック（Haptics）を使ったらどうだろう？ #UX',
+    createdAt: Date.now() - 7200000,
+    updatedAt: Date.now(),
+    stacks: ['Design Philosophy']
+  },
+  {
+    id: '7',
+    type: CardType.Reference,
+    title: 'カラーパレット Hexコード',
+    body: 'Paper: #fcfbf9\nInk: #2d2a26\nBlue: #3b82f6\nRed: #ef4444',
+    createdAt: Date.now() - 10800000,
+    updatedAt: Date.now(),
+    stacks: ['Design System']
+  },
+  {
+    id: '6',
+    type: CardType.GTD,
+    title: '食材の買い出し',
+    body: '- 牛乳\n- コーヒー豆\n- 卵\n- アボカド',
+    createdAt: Date.now() - 14400000,
+    updatedAt: Date.now(),
+    dueDate: Date.now() - 86400000, // Yesterday (Overdue)
+    completed: false,
+    stacks: ['Personal']
+  },
+  {
+    id: '5',
+    type: CardType.Record,
+    title: '会議メモ: Q4 計画',
+    body: '主な目標:\n1. モバイルアプリのローンチ\n2. ユーザー維持率を15%向上させる\n\n[[戦略]] がここでは重要になる。',
+    createdAt: Date.now() - 86400000,
+    updatedAt: Date.now(),
+    stacks: ['Work']
+  },
+  {
+    id: '4',
+    type: CardType.GTD,
+    title: '歯医者の予約',
+    body: 'スミス先生に電話する。',
+    createdAt: Date.now() - 90000000,
+    updatedAt: Date.now(),
+    dueDate: Date.now() + 604800000, // Next week
+    completed: false,
+    stacks: ['Personal']
+  },
+  {
+    id: '3',
+    type: CardType.Discovery,
+    title: 'React 19 Server Components',
+    body: 'RSCがこのアプリのクライアントサイドの状態管理にどう影響するか調査が必要。',
+    createdAt: Date.now() - 100000000,
+    updatedAt: Date.now(),
+    stacks: ['Tech Radar']
+  },
+  {
+    id: '2',
+    type: CardType.Reference,
+    title: 'PoIC マニフェスト',
+    body: '1. 全ての情報はパイル（山）に入る。\n2. カードは不変の記録である。\n3. 発見は再シャッフルから生まれる。',
+    createdAt: Date.now() - 200000000,
+    updatedAt: Date.now(),
+    stacks: ['PoIC']
+  },
+  {
+    id: '1',
+    type: CardType.Record,
+    title: 'システム初期化',
+    body: 'Hello World. パイルが始まった。',
+    createdAt: Date.now() - 300000000,
+    updatedAt: Date.now(),
+    stacks: ['Meta']
+  }
 ];
 
 export default function App() {
@@ -72,17 +159,13 @@ export default function App() {
   
   // 1. Initial Load & Dropbox Auth Check
   useEffect(() => {
-      // Check for Dropbox token in URL hash
       const token = parseTokenFromUrl();
       if (token) {
           localStorage.setItem('dropbox_token', token);
           setDropboxToken(token);
-          window.history.replaceState(null, '', window.location.pathname); // Clean URL
-          
-          // Initial Sync (Download)
+          window.history.replaceState(null, '', window.location.pathname); 
           syncDownload(token);
       } else if (dropboxToken) {
-          // If already logged in, try to download/sync on startup
           syncDownload(dropboxToken);
       }
   }, []);
@@ -98,7 +181,7 @@ export default function App() {
 
       const timeoutId = setTimeout(() => {
           syncUpload(dropboxToken, cards);
-      }, 3000); // Wait 3 seconds after last change to upload
+      }, 3000); 
 
       return () => clearTimeout(timeoutId);
   }, [cards, dropboxToken]);
@@ -111,26 +194,26 @@ export default function App() {
           const remoteCards = await downloadFromDropbox(token);
           if (remoteCards && Array.isArray(remoteCards)) {
               setCards(prevCards => {
-                  // Merge Logic: Use ID map. Prefer newer updatedAt
                   const mergedMap = new Map<string, Card>();
                   
                   prevCards.forEach(c => mergedMap.set(c.id, c));
                   
                   remoteCards.forEach((rc: Card) => {
                       const local = mergedMap.get(rc.id);
+                      // Use newer version. 
+                      // If remote is deleted but newer, local becomes deleted (handled by view filter)
                       if (!local || (rc.updatedAt > local.updatedAt)) {
                           mergedMap.set(rc.id, rc);
                       }
                   });
                   
-                  // Convert back to array and sort by updatedAt desc
                   return Array.from(mergedMap.values()).sort((a, b) => b.updatedAt - a.updatedAt);
               });
           }
       } catch (error) {
           console.error('Dropbox Sync Error:', error);
           if (error instanceof Error && error.message.includes('401')) {
-              handleDisconnectDropbox(); // Token expired
+              handleDisconnectDropbox();
           }
       } finally {
           setIsSyncing(false);
@@ -148,6 +231,12 @@ export default function App() {
           }
       } finally {
           setIsSyncing(false);
+      }
+  };
+
+  const handleManualSync = () => {
+      if (dropboxToken) {
+          syncDownload(dropboxToken);
       }
   };
 
@@ -218,7 +307,8 @@ export default function App() {
         updatedAt: Date.now(),
         dueDate: cardData.dueDate,
         completed: false,
-        stacks: cardData.stacks || []
+        stacks: cardData.stacks || [],
+        isDeleted: false
       };
       setCards([newCard, ...cards]); 
       
@@ -233,7 +323,12 @@ export default function App() {
   };
 
   const handleDeleteCard = (id: string) => {
-    setCards(cards.filter(c => c.id !== id));
+    // Soft Delete: Mark as deleted and update timestamp for sync
+    setCards(cards.map(c => 
+        c.id === id 
+            ? { ...c, isDeleted: true, updatedAt: Date.now() } 
+            : c
+    ));
     closeEditor();
   };
   
@@ -260,7 +355,12 @@ export default function App() {
   };
   
   const confirmBatchDelete = () => {
-      setCards(cards.filter(c => !selectedCardIds.has(c.id)));
+      // Soft Delete batch
+      setCards(cards.map(c => 
+          selectedCardIds.has(c.id)
+            ? { ...c, isDeleted: true, updatedAt: Date.now() }
+            : c
+      ));
       setSelectedCardIds(new Set());
       setIsSelectionMode(false);
       setShowBatchDeleteConfirm(false);
@@ -295,11 +395,13 @@ export default function App() {
   };
 
   const toggleGTDComplete = (id: string) => {
+    // Update timestamp on toggle for sync
     setCards(cards.map(c => 
-      c.id === id ? { ...c, completed: !c.completed } : c
+      c.id === id ? { ...c, completed: !c.completed, updatedAt: Date.now() } : c
     ));
   };
 
+  // リンクをクリックした時の挙動
   const handleLinkClick = (term: string) => {
     if (term.startsWith('#')) {
         setSearchQuery(term);
@@ -308,7 +410,7 @@ export default function App() {
         setIsSidebarOpen(false);
         return;
     }
-    const targetCard = cards.find(c => c.title.toLowerCase() === term.toLowerCase());
+    const targetCard = cards.find(c => !c.isDeleted && c.title.toLowerCase() === term.toLowerCase());
     if (targetCard) {
         openEditCardEditor(targetCard);
     } else {
@@ -324,7 +426,7 @@ export default function App() {
           closeEditor();
           handleLinkClick(term);
       } else {
-          const targetCard = cards.find(c => c.title.toLowerCase() === term.toLowerCase());
+          const targetCard = cards.find(c => !c.isDeleted && c.title.toLowerCase() === term.toLowerCase());
           if (targetCard) {
               setEditingCardId(targetCard.id); 
           } else {
@@ -453,22 +555,26 @@ ${opmlBody}
 
   const allStacks = useMemo(() => {
     const stackMap = new Map<string, number>();
-    cards.forEach(c => c.stacks?.forEach(s => {
-        stackMap.set(s, (stackMap.get(s) || 0) + 1);
-    }));
+    cards.forEach(c => {
+        if (!c.isDeleted) {
+            c.stacks?.forEach(s => {
+                stackMap.set(s, (stackMap.get(s) || 0) + 1);
+            });
+        }
+    });
     return Array.from(stackMap.entries())
         .sort((a, b) => a[0].localeCompare(b[0]))
         .map(([name, count]) => ({ name, count }));
   }, [cards]);
   
   const allTitles = useMemo(() => {
-      return Array.from(new Set(cards.map(c => c.title)));
+      return Array.from(new Set(cards.filter(c => !c.isDeleted).map(c => c.title)));
   }, [cards]);
   
   const commonStacks = useMemo(() => {
       const stacks = new Set<string>();
       cards.forEach(c => {
-          if (selectedCardIds.has(c.id)) {
+          if (!c.isDeleted && selectedCardIds.has(c.id)) {
               c.stacks?.forEach(s => stacks.add(s));
           }
       });
@@ -476,16 +582,18 @@ ${opmlBody}
   }, [cards, selectedCardIds]);
 
   const stats: PoicStats = useMemo(() => ({
-    total: cards.length,
-    record: cards.filter(c => c.type === CardType.Record).length,
-    discovery: cards.filter(c => c.type === CardType.Discovery).length,
-    gtdActive: cards.filter(c => c.type === CardType.GTD && !c.completed).length, // Only active
-    gtdTotal: cards.filter(c => c.type === CardType.GTD).length, // All
-    reference: cards.filter(c => c.type === CardType.Reference).length,
+    total: cards.filter(c => !c.isDeleted).length,
+    record: cards.filter(c => !c.isDeleted && c.type === CardType.Record).length,
+    discovery: cards.filter(c => !c.isDeleted && c.type === CardType.Discovery).length,
+    gtdActive: cards.filter(c => !c.isDeleted && c.type === CardType.GTD && !c.completed).length,
+    gtdTotal: cards.filter(c => !c.isDeleted && c.type === CardType.GTD).length,
+    reference: cards.filter(c => !c.isDeleted && c.type === CardType.Reference).length,
   }), [cards]);
 
   const filteredCards = useMemo(() => {
-    let result = cards;
+    // Filter out deleted cards for view
+    let result = cards.filter(c => !c.isDeleted);
+    
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(c => 
@@ -519,7 +627,9 @@ ${opmlBody}
 
   const activeCardForEditor = useMemo(() => {
     if (!editingCardId) return undefined;
-    return cards.find(c => c.id === editingCardId);
+    const card = cards.find(c => c.id === editingCardId);
+    // Don't show if deleted
+    return card?.isDeleted ? undefined : card;
   }, [editingCardId, cards]);
 
   const activeCardBacklinks = useMemo(() => {
@@ -528,7 +638,7 @@ ${opmlBody}
       if (!title) return [];
       const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(`\\[\\[${escapedTitle}\\]\\]`, 'i');
-      return cards.filter(c => c.id !== activeCardForEditor.id && regex.test(c.body));
+      return cards.filter(c => !c.isDeleted && c.id !== activeCardForEditor.id && regex.test(c.body));
   }, [activeCardForEditor, cards]);
 
   const gtdGroups = useMemo(() => {
@@ -569,8 +679,7 @@ ${opmlBody}
           />
       )}
       
-      {/* Batch Tagging Modal, Batch Delete Confirmation, Editor Modal overlays... (omitted repetitive rendering logic for brevity, assumed same as previous) */}
-      
+      {/* ... (Batch Tagging Modal, Delete Confirmation overlays remain same) ... */}
       {showBatchTagModal && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]">
               <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200">
@@ -710,13 +819,21 @@ ${opmlBody}
                     <Cloud size={12} /> Sync
                 </h3>
                 {dropboxToken ? (
-                    <div className="px-3">
+                    <div className="px-3 space-y-2">
                         <button 
                             onClick={handleDisconnectDropbox}
                             className="w-full bg-blue-100 text-blue-700 text-xs py-2 rounded-md font-bold hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"
                         >
                             <Cloud size={14} />
                             {isSyncing ? '同期中...' : 'Dropbox 接続済み'}
+                        </button>
+                        <button 
+                            onClick={handleManualSync}
+                            disabled={isSyncing}
+                            className="w-full bg-stone-200 text-stone-600 text-xs py-2 rounded-md font-bold hover:bg-stone-300 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                            <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
+                            今すぐ同期
                         </button>
                     </div>
                 ) : (
@@ -734,9 +851,10 @@ ${opmlBody}
         </nav>
       </aside>
 
-      {/* Main Content Area - Scrollable */}
+      {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto bg-stone-200">
-        {/* Sticky Header... (Same as before) */}
+        {/* ... (Header, Feed Content, FAB remain the same) ... */}
+        {/* Sticky Header */}
         <header className="sticky top-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 mb-4 border-b border-stone-300/30">
             <div className="flex items-center gap-3 flex-1">
                 <button onClick={() => setIsSidebarOpen(true)} className="md:hidden text-stone-600 hover:bg-stone-300 p-2 rounded-md">
