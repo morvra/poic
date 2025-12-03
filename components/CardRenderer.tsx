@@ -7,10 +7,11 @@ interface CardRendererProps {
 }
 
 export const CardRenderer: React.FC<CardRendererProps> = ({ content, onLinkClick, className = '' }) => {
-  // Simple parser for [[WikiLinks]], #hashtags, and URLs
+  // Simple parser for [[WikiLinks]] and URLs (Hashtags support removed)
   const renderContent = () => {
-    // Regex splits: WikiLink, Hashtag, or URL (http/https)
-    const parts = content.split(/(\[\[.*?\]\]|#[^\s#]+|https?:\/\/[^\s]+)/g);
+    // Regex splits: WikiLink, or URL (http/https)
+    // Removed |#[^\s#]+ from regex
+    const parts = content.split(/(\[\[.*?\]\]|https?:\/\/[^\s]+)/g);
 
     return parts.map((part, index) => {
       // Wiki Link
@@ -28,18 +29,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({ content, onLinkClick
           </span>
         );
       }
-      // Hashtag
-      if (part.startsWith('#')) {
-        return (
-          <span
-            key={index}
-            onClick={(e) => { e.stopPropagation(); onLinkClick(part); }}
-            className="text-stone-500 hover:text-stone-800 cursor-pointer font-medium italic"
-          >
-            {part}
-          </span>
-        );
-      }
+      
       // URL
       if (part.match(/^https?:\/\//)) {
         return (
@@ -55,7 +45,8 @@ export const CardRenderer: React.FC<CardRendererProps> = ({ content, onLinkClick
           </a>
         );
       }
-      // Normal text
+      
+      // Normal text (includes #hashtags now)
       return <span key={index}>{part}</span>;
     });
   };
