@@ -64,6 +64,7 @@ export const Editor: React.FC<EditorProps> = ({
   const readViewRef = useRef<HTMLDivElement>(null);
   const stackInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMouseDownRef = useRef(false); // Track mouse state to distinguish click vs tab focus
   
   // Ref to track previous ID for detecting card switches vs auto-save updates
   const prevCardIdRef = useRef<string | undefined>(initialCard?.id);
@@ -109,8 +110,7 @@ export const Editor: React.FC<EditorProps> = ({
           setCompleted(initialCard.completed || false);
           setShowDeleteConfirm(false);
           
-          // Only switch to view mode if we genuinely switched cards (ID changed from one valid ID to another).
-          // If we transitioned from undefined (new card) to a valid ID (saved card), keep editing mode.
+          // Only switch to view mode if we genuinely switched cards
           if (prevId !== undefined && prevId !== currentId) {
               setIsEditingBody(false);
           }
@@ -158,7 +158,6 @@ export const Editor: React.FC<EditorProps> = ({
   // Focus textarea when switching to edit mode
   useEffect(() => {
       if (isEditingBody && bodyRef.current) {
-          // If switching to edit mode (and not just initial load of new card which focuses title), focus body
           if (initialCard || document.activeElement === readViewRef.current) {
               bodyRef.current.focus();
           }
@@ -343,8 +342,10 @@ export const Editor: React.FC<EditorProps> = ({
   const handleViewModeClick = (e: React.MouseEvent<HTMLDivElement>) => {
       let offset = body.length;
       const selection = window.getSelection();
+
       if (selection && selection.rangeCount > 0 && readViewRef.current) {
           const range = selection.getRangeAt(0);
+          
           if (readViewRef.current.contains(range.startContainer)) {
                const preCaretRange = range.cloneRange();
                preCaretRange.selectNodeContents(readViewRef.current);
@@ -352,8 +353,10 @@ export const Editor: React.FC<EditorProps> = ({
                offset = preCaretRange.toString().length;
           }
       }
+      
       setInitialCursorOffset(offset); 
       setIsEditingBody(true);
+      isMouseDownRef.current = false; // Reset
   };
 
   const handleDeleteClick = () => {
@@ -569,9 +572,13 @@ export const Editor: React.FC<EditorProps> = ({
                 <div 
                     ref={readViewRef}
                     onClick={handleViewModeClick}
-                    onFocus={() => setIsEditingBody(true)} // Enable edit mode on focus (Tab navigation)
-                    tabIndex={0} // Make div focusable
-                    className="w-full h-full min-h-[150px] cursor-text outline-none" // remove outline
+                    onMouseDown={() => { isMouseDownRef.current = true; }}
+                    onMouseUp={() => { isMouseDownRef.current = false; }}
+                    onFocus={() => { 
+                        if (!isMouseDownRef.current) setIsEditingBody(true);
+                    }} 
+                    tabIndex={0} 
+                    className="w-full h-full min-h-[150px] cursor-text outline-none"
                 >
                     <CardRenderer 
                         content={body || '内容なし'} 
