@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardType } from '../types';
-import { formatTimeShort, formatTimestampByPattern } from '../utils'; // Import updated util
+import { formatTimeShort, formatTimestampByPattern } from '../utils';
 import { CardRenderer } from './CardRenderer';
 import { Calendar, Save, X, Trash2, Clock, CheckCircle, Circle, Link as LinkIcon, AlertTriangle, FileText, Lightbulb, CheckSquare, BookOpen } from 'lucide-react';
 
@@ -8,7 +8,7 @@ interface EditorProps {
   initialCard?: Card;
   allTitles: string[];
   availableStacks: string[];
-  dateFormat: string; // New prop
+  dateFormat: string;
   onSave: (card: Partial<Card>, shouldClose?: boolean) => void;
   onCancel: () => void;
   onDelete?: (id: string) => void;
@@ -30,7 +30,7 @@ export const Editor: React.FC<EditorProps> = ({
   initialCard, 
   allTitles, 
   availableStacks, 
-  dateFormat, // Destructure new prop
+  dateFormat, 
   onSave, 
   onCancel, 
   onDelete, 
@@ -64,6 +64,9 @@ export const Editor: React.FC<EditorProps> = ({
   const readViewRef = useRef<HTMLDivElement>(null);
   const stackInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Ref to track previous ID for detecting card switches vs auto-save updates
+  const prevCardIdRef = useRef<string | undefined>(initialCard?.id);
 
   // --- Autocomplete State ---
   const [wikiSuggestions, setWikiSuggestions] = useState<string[]>([]);
@@ -91,8 +94,11 @@ export const Editor: React.FC<EditorProps> = ({
       }
   }, [initialCard]);
 
-  // Update state ONLY when ID changes to avoid overwriting during auto-save
+  // Update state when initialCard changes
   useEffect(() => {
+      const currentId = initialCard?.id;
+      const prevId = prevCardIdRef.current;
+
       if (initialCard) {
           setType(initialCard.type);
           setTitle(initialCard.title);
@@ -101,9 +107,16 @@ export const Editor: React.FC<EditorProps> = ({
           setCreatedAt(new Date(initialCard.createdAt - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16));
           setStacks(initialCard.stacks?.join(', ') || '');
           setCompleted(initialCard.completed || false);
-          setIsEditingBody(false);
           setShowDeleteConfirm(false);
+          
+          // Only switch to view mode if we genuinely switched cards (ID changed from one valid ID to another).
+          // If we transitioned from undefined (new card) to a valid ID (saved card), keep editing mode.
+          if (prevId !== undefined && prevId !== currentId) {
+              setIsEditingBody(false);
+          }
       }
+      
+      prevCardIdRef.current = currentId;
   }, [initialCard?.id]);
 
   // Auto-save logic
@@ -145,7 +158,8 @@ export const Editor: React.FC<EditorProps> = ({
   // Focus textarea when switching to edit mode
   useEffect(() => {
       if (isEditingBody && bodyRef.current) {
-          if (initialCard) {
+          // If switching to edit mode (and not just initial load of new card which focuses title), focus body
+          if (initialCard || document.activeElement === readViewRef.current) {
               bodyRef.current.focus();
           }
           
@@ -219,11 +233,9 @@ export const Editor: React.FC<EditorProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [body, onCancel, showWikiSuggestions, showStackSuggestions, wikiSuggestions, wikiSuggestionIndex, stackSuggestions, stackSuggestionIndex, isEditingBody, showDeleteConfirm]);
 
-  // Insert Timestamp using the configured format
   const insertTimestamp = () => {
     if (!bodyRef.current) return;
     const now = new Date();
-    // Use the utility function with the current dateFormat prop
     const timestampStr = ` ${formatTimestampByPattern(now, dateFormat)} `;
     const start = bodyRef.current.selectionStart;
     const end = bodyRef.current.selectionEnd;
@@ -557,7 +569,9 @@ export const Editor: React.FC<EditorProps> = ({
                 <div 
                     ref={readViewRef}
                     onClick={handleViewModeClick}
-                    className="w-full h-full min-h-[150px] cursor-text"
+                    onFocus={() => setIsEditingBody(true)} // Enable edit mode on focus (Tab navigation)
+                    tabIndex={0} // Make div focusable
+                    className="w-full h-full min-h-[150px] cursor-text outline-none" // remove outline
                 >
                     <CardRenderer 
                         content={body || '内容なし'} 
