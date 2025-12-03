@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardType } from '../types';
 import { formatTimeShort } from '../utils';
 import { CardRenderer } from './CardRenderer';
-import { Calendar, Save, X, Trash2, Clock, CheckCircle, Circle, Link as LinkIcon, AlertTriangle } from 'lucide-react';
+import { Calendar, Save, X, Trash2, Clock, CheckCircle, Circle, Link as LinkIcon, AlertTriangle, FileText, Lightbulb, CheckSquare, BookOpen } from 'lucide-react';
 
 interface EditorProps {
   initialCard?: Card;
@@ -14,6 +14,16 @@ interface EditorProps {
   onNavigate: (term: string) => void;
   backlinks?: Card[];
 }
+
+// Icons for the selector
+const TypeIcon = ({ type, className }: { type: CardType, className?: string }) => {
+    switch (type) {
+        case CardType.Record: return <FileText size={16} className={className} />;
+        case CardType.Discovery: return <Lightbulb size={16} className={className} />;
+        case CardType.GTD: return <CheckSquare size={16} className={className} />;
+        case CardType.Reference: return <BookOpen size={16} className={className} />;
+    }
+};
 
 export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availableStacks, onSave, onCancel, onDelete, onNavigate, backlinks = [] }) => {
   const [type, setType] = useState<CardType>(initialCard?.type || CardType.Record);
@@ -89,7 +99,6 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
   }, [title, body, type, dueDate, stacks, createdAt, completed]);
 
   const handleAutoSave = () => {
-    // Basic validation
     if (!title.trim() && !body.trim()) return; 
 
     let dueTimestamp: number | undefined = undefined;
@@ -99,9 +108,6 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
     
     const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
     const createdTimestamp = new Date(createdAt).getTime();
-
-    // Check if anything actually changed from initialCard to avoid unnecessary writes? 
-    // For now, simpler to just save.
     
     onSave({
       id: initialCard?.id,
@@ -112,7 +118,7 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
       stacks: stackList,
       createdAt: createdTimestamp,
       completed: type === CardType.GTD ? completed : false,
-    }, false); // false = do not close editor
+    }, false); 
   };
 
   // Focus textarea when switching to edit mode
@@ -146,7 +152,7 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
         }
       }
 
-      // Autocomplete Navigation
+      // Autocomplete Navigation logic (omitted for brevity, assume same as before)
       if (showWikiSuggestions) {
           if (e.key === 'ArrowDown') {
               e.preventDefault();
@@ -181,7 +187,6 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
           return;
       }
 
-      // Modal Close
       if (e.key === 'Escape' && !showDeleteConfirm) {
         onCancel();
       } else if (e.key === 'Escape' && showDeleteConfirm) {
@@ -195,18 +200,14 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
 
   const insertTimestamp = () => {
     if (!bodyRef.current) return;
-    
     const now = new Date();
     const timestampStr = ` ${now.toLocaleString('ja-JP', { 
         year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
     })} `;
-    
     const start = bodyRef.current.selectionStart;
     const end = bodyRef.current.selectionEnd;
-    
     const newBody = body.substring(0, start) + timestampStr + body.substring(end);
     setBody(newBody);
-    
     setTimeout(() => {
         if(bodyRef.current) {
             bodyRef.current.selectionStart = bodyRef.current.selectionEnd = start + timestampStr.length;
@@ -215,53 +216,39 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
     }, 0);
   };
 
-  // --- Helper: Get Caret Coordinates ---
   const getCaretCoordinates = (element: HTMLTextAreaElement, position: number) => {
     const div = document.createElement('div');
     const style = getComputedStyle(element);
-    
     Array.from(style).forEach((prop) => {
         div.style.setProperty(prop, style.getPropertyValue(prop));
     });
-    
     div.style.position = 'absolute';
     div.style.visibility = 'hidden';
     div.style.whiteSpace = 'pre-wrap';
     div.style.width = `${element.clientWidth}px`;
     div.textContent = element.value.substring(0, position);
-    
     const span = document.createElement('span');
     span.textContent = element.value.substring(position) || '.';
     div.appendChild(span);
-    
     document.body.appendChild(div);
     const { offsetLeft: spanLeft, offsetTop: spanTop } = span;
     document.body.removeChild(div);
-    
-    return {
-        top: spanTop - element.scrollTop,
-        left: spanLeft - element.scrollLeft
-    };
+    return { top: spanTop - element.scrollTop, left: spanLeft - element.scrollLeft };
   };
 
-  // --- Autocomplete Logic ---
   const handleBodyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const val = e.target.value;
       setBody(val);
-      
       const cursor = e.target.selectionStart;
       const textBeforeCursor = val.substring(0, cursor);
       const match = textBeforeCursor.match(/\[\[([^\]]*)$/);
-
       if (match) {
           const term = match[1];
           const matches = allTitles.filter(t => t.toLowerCase().includes(term.toLowerCase()) && t !== title).slice(0, 5);
-          
           if (matches.length > 0) {
             setWikiSuggestions(matches);
             setShowWikiSuggestions(true);
             setWikiSuggestionIndex(0);
-            
             const coords = getCaretCoordinates(e.target, cursor);
             setWikiSuggestionPos({ top: coords.top + 24, left: coords.left });
           } else {
@@ -277,13 +264,11 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
       const cursor = bodyRef.current.selectionStart;
       const textBeforeCursor = body.substring(0, cursor);
       const textAfterCursor = body.substring(cursor);
-      
       const lastOpenBracket = textBeforeCursor.lastIndexOf('[[');
       if (lastOpenBracket !== -1) {
           const newBody = body.substring(0, lastOpenBracket) + `[[${suggestion}]]` + textAfterCursor;
           setBody(newBody);
           setShowWikiSuggestions(false);
-          
           setTimeout(() => {
              if (bodyRef.current) {
                  const newCursor = lastOpenBracket + suggestion.length + 4;
@@ -297,10 +282,8 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
   const handleStackChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = e.target.value;
       setStacks(val);
-      
       const parts = val.split(/,|、/); 
       const currentInput = parts[parts.length - 1].trim();
-      
       if (currentInput.length > 0) {
           const matches = availableStacks.filter(s => s.toLowerCase().includes(currentInput.toLowerCase()) && !parts.slice(0, -1).map(p => p.trim()).includes(s)).slice(0, 5);
           if (matches.length > 0) {
@@ -327,10 +310,8 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
   const handleViewModeClick = (e: React.MouseEvent<HTMLDivElement>) => {
       let offset = body.length;
       const selection = window.getSelection();
-
       if (selection && selection.rangeCount > 0 && readViewRef.current) {
           const range = selection.getRangeAt(0);
-          
           if (readViewRef.current.contains(range.startContainer)) {
                const preCaretRange = range.cloneRange();
                preCaretRange.selectNodeContents(readViewRef.current);
@@ -338,7 +319,6 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
                offset = preCaretRange.toString().length;
           }
       }
-      
       setInitialCursorOffset(offset); 
       setIsEditingBody(true);
   };
@@ -423,13 +403,15 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
                 <button
                     key={t}
                     onClick={() => setType(t)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide transition-all ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2 ${
                     type === t 
                         ? TYPE_COLORS_BG[t] + ' shadow-sm transform scale-105'
                         : 'bg-stone-100 text-stone-400 hover:bg-stone-200'
                     }`}
+                    title={t}
                 >
-                    {t}
+                    <TypeIcon type={t} />
+                    <span className="hidden sm:inline">{t}</span>
                 </button>
                 ))}
             </div>
@@ -450,7 +432,7 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
             <input
                 type="text"
                 placeholder="タイトルなし"
-                className={`flex-1 min-w-0 text-3xl font-bold font-sans text-ink placeholder-stone-300 border-none focus:outline-none bg-transparent p-0 ${completed ? 'text-stone-400' : ''}`}
+                className={`flex-1 min-w-0 text-xl sm:text-2xl font-bold font-sans text-ink placeholder-stone-300 border-none focus:outline-none bg-transparent p-0 ${completed ? 'text-stone-400' : ''}`}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 autoFocus={!initialCard}
