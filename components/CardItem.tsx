@@ -143,7 +143,7 @@ export const CardItem: React.FC<CardItemProps> = ({
         </div>
 
         {/* Body Preview */}
-        <div className="relative mt-auto">
+        <div className="relative mb-auto">
              <div className="line-clamp-3 font-sans text-sm text-ink/90 leading-relaxed">
                 <CardRenderer content={card.body} onLinkClick={onLinkClick} />
              </div>
