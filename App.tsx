@@ -1,0 +1,992 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { Card, CardType, ViewMode, PoicStats } from './types';
+import { generateId, getRelativeDateLabel, formatDate } from './utils';
+import { CardItem } from './components/CardItem';
+import { Editor } from './components/Editor';
+import { 
+  Library, 
+  Layers, 
+  CheckSquare, 
+  Search, 
+  Plus, 
+  Filter,
+  Menu,
+  X,
+  Shuffle,
+  Home,
+  Copy,
+  CheckSquare as SelectIcon,
+  Trash2,
+  Square,
+  AlertTriangle,
+  Tag
+} from 'lucide-react';
+
+// Enhanced initial data with 10 varied cards
+const INITIAL_CARDS: Card[] = [
+  {
+    id: '10',
+    type: CardType.Record,
+    title: '朝の振り返り',
+    body: '雨が窓を優しく叩いている。\n\n> 08:30 コーディングには最適な天気だ。\n\n今日はスタッキングアニメーションの実装に集中しよう。',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    stacks: ['Journal']
+  },
+  {
+    id: '9',
+    type: CardType.GTD,
+    title: 'PR #402 のレビュー',
+    body: 'モバイルデバイスでの新しいサイドバー実装のレスポンシブ動作を確認する。',
+    createdAt: Date.now() - 3600000,
+    updatedAt: Date.now(),
+    dueDate: Date.now() + 86400000, // Tomorrow
+    completed: false,
+    stacks: ['Project Alpha']
+  },
+  {
+    id: '8',
+    type: CardType.Discovery,
+    title: 'デジタルの触感',
+    body: 'アイデア: モバイルでカードをドラッグする時に触覚フィードバック（Haptics）を使ったらどうだろう？ #UX',
+    createdAt: Date.now() - 7200000,
+    updatedAt: Date.now(),
+    stacks: ['Design Philosophy']
+  },
+  {
+    id: '7',
+    type: CardType.Reference,
+    title: 'カラーパレット Hexコード',
+    body: 'Paper: #fcfbf9\nInk: #2d2a26\nBlue: #3b82f6\nRed: #ef4444',
+    createdAt: Date.now() - 10800000,
+    updatedAt: Date.now(),
+    stacks: ['Design System']
+  },
+  {
+    id: '6',
+    type: CardType.GTD,
+    title: '食材の買い出し',
+    body: '- 牛乳\n- コーヒー豆\n- 卵\n- アボカド',
+    createdAt: Date.now() - 14400000,
+    updatedAt: Date.now(),
+    dueDate: Date.now() - 86400000, // Yesterday (Overdue)
+    completed: false,
+    stacks: ['Personal']
+  },
+  {
+    id: '5',
+    type: CardType.Record,
+    title: '会議メモ: Q4 計画',
+    body: '主な目標:\n1. モバイルアプリのローンチ\n2. ユーザー維持率を15%向上させる\n\n[[戦略]] がここでは重要になる。',
+    createdAt: Date.now() - 86400000,
+    updatedAt: Date.now(),
+    stacks: ['Work']
+  },
+  {
+    id: '4',
+    type: CardType.GTD,
+    title: '歯医者の予約',
+    body: 'スミス先生に電話する。',
+    createdAt: Date.now() - 90000000,
+    updatedAt: Date.now(),
+    dueDate: Date.now() + 604800000, // Next week
+    completed: false,
+    stacks: ['Personal']
+  },
+  {
+    id: '3',
+    type: CardType.Discovery,
+    title: 'React 19 Server Components',
+    body: 'RSCがこのアプリのクライアントサイドの状態管理にどう影響するか調査が必要。',
+    createdAt: Date.now() - 100000000,
+    updatedAt: Date.now(),
+    stacks: ['Tech Radar']
+  },
+  {
+    id: '2',
+    type: CardType.Reference,
+    title: 'PoIC マニフェスト',
+    body: '1. 全ての情報はパイル（山）に入る。\n2. カードは不変の記録である。\n3. 発見は再シャッフルから生まれる。',
+    createdAt: Date.now() - 200000000,
+    updatedAt: Date.now(),
+    stacks: ['PoIC']
+  },
+  {
+    id: '1',
+    type: CardType.Record,
+    title: 'システム初期化',
+    body: 'Hello World. パイルが始まった。',
+    createdAt: Date.now() - 300000000,
+    updatedAt: Date.now(),
+    stacks: ['Meta']
+  }
+];
+
+export default function App() {
+  // --- State ---
+  const [cards, setCards] = useState<Card[]>(() => {
+    const saved = localStorage.getItem('poic-cards');
+    return saved ? JSON.parse(saved) : INITIAL_CARDS;
+  });
+  
+  const [viewMode, setViewMode] = useState<ViewMode>('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeStack, setActiveStack] = useState<string | null>(null);
+  const [activeType, setActiveType] = useState<CardType | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // Selection Mode State
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+  
+  // Batch Tagging State
+  const [showBatchTagModal, setShowBatchTagModal] = useState(false);
+  const [batchTagInput, setBatchTagInput] = useState('');
+
+  // Modal State
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+
+  // --- Effects ---
+  useEffect(() => {
+    localStorage.setItem('poic-cards', JSON.stringify(cards));
+  }, [cards]);
+
+  // Global Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        // Ignore if focus is on an input or textarea
+        if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+        
+        // 'n' for new card
+        if (e.key === 'n' && !isEditorOpen) {
+            e.preventDefault();
+            openNewCardEditor();
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditorOpen]);
+
+  // --- Actions ---
+  const handleSaveCard = (cardData: Partial<Card>, shouldClose = true) => {
+    if (cardData.id) {
+      // Update existing
+      // Check for title change to update backlinks
+      const oldCard = cards.find(c => c.id === cardData.id);
+      const titleChanged = oldCard && cardData.title && oldCard.title !== cardData.title;
+      
+      let updatedCards = cards.map(c => 
+        c.id === cardData.id 
+          ? { ...c, ...cardData, updatedAt: Date.now() } as Card 
+          : c
+      );
+
+      // If title changed, update all other cards that link to the old title
+      if (titleChanged && oldCard) {
+          const oldTitleRegex = new RegExp(`\\[\\[${oldCard.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\]`, 'g');
+          const newLink = `[[${cardData.title}]]`;
+          
+          updatedCards = updatedCards.map(c => {
+              if (c.id === cardData.id) return c; // Skip self
+              if (c.body.match(oldTitleRegex)) {
+                  return {
+                      ...c,
+                      body: c.body.replace(oldTitleRegex, newLink),
+                      updatedAt: Date.now()
+                  };
+              }
+              return c;
+          });
+      }
+
+      setCards(updatedCards);
+
+    } else {
+      // Create new
+      const newId = generateId();
+      const newCard: Card = {
+        id: newId,
+        type: cardData.type || CardType.Record,
+        title: cardData.title || '無題',
+        body: cardData.body || '',
+        createdAt: cardData.createdAt || Date.now(),
+        updatedAt: Date.now(),
+        dueDate: cardData.dueDate,
+        completed: false,
+        stacks: cardData.stacks || []
+      };
+      setCards([newCard, ...cards]); // Add to top
+      
+      // If auto-saving a new card, switch to editing mode for that ID
+      if (!shouldClose) {
+          setEditingCardId(newId);
+      }
+    }
+    
+    if (shouldClose) {
+        closeEditor();
+    }
+  };
+
+  const handleDeleteCard = (id: string) => {
+    setCards(cards.filter(c => c.id !== id));
+    closeEditor();
+  };
+  
+  const handleToggleSelection = () => {
+      setIsSelectionMode(!isSelectionMode);
+      setSelectedCardIds(new Set()); // Reset selection when toggling
+      setShowBatchDeleteConfirm(false);
+      setShowBatchTagModal(false);
+  };
+
+  const handleSelectCard = (id: string) => {
+      const newSelection = new Set(selectedCardIds);
+      if (newSelection.has(id)) {
+          newSelection.delete(id);
+      } else {
+          newSelection.add(id);
+      }
+      setSelectedCardIds(newSelection);
+  };
+
+  const handleClickDeleteSelected = () => {
+      if (selectedCardIds.size === 0) return;
+      setShowBatchDeleteConfirm(true);
+  };
+  
+  const confirmBatchDelete = () => {
+      setCards(cards.filter(c => !selectedCardIds.has(c.id)));
+      setSelectedCardIds(new Set());
+      setIsSelectionMode(false);
+      setShowBatchDeleteConfirm(false);
+  };
+  
+  const handleBatchAddTag = () => {
+      if (!batchTagInput.trim()) return;
+      const tagToAdd = batchTagInput.trim();
+      
+      setCards(cards.map(c => {
+          if (selectedCardIds.has(c.id)) {
+              const currentStacks = c.stacks || [];
+              if (!currentStacks.includes(tagToAdd)) {
+                  return { ...c, stacks: [...currentStacks, tagToAdd], updatedAt: Date.now() };
+              }
+          }
+          return c;
+      }));
+      setBatchTagInput('');
+  };
+  
+  const handleBatchRemoveTag = (tag: string) => {
+      setCards(cards.map(c => {
+          if (selectedCardIds.has(c.id)) {
+              const currentStacks = c.stacks || [];
+              if (currentStacks.includes(tag)) {
+                  return { ...c, stacks: currentStacks.filter(s => s !== tag), updatedAt: Date.now() };
+              }
+          }
+          return c;
+      }));
+  };
+
+  const toggleGTDComplete = (id: string) => {
+    setCards(cards.map(c => 
+      c.id === id ? { ...c, completed: !c.completed } : c
+    ));
+  };
+
+  // リンクをクリックした時の挙動
+  const handleLinkClick = (term: string) => {
+    if (term.startsWith('#')) {
+        setSearchQuery(term);
+        setViewMode('All');
+        setActiveStack(null);
+        setIsSidebarOpen(false);
+        return;
+    }
+    const targetCard = cards.find(c => c.title.toLowerCase() === term.toLowerCase());
+    if (targetCard) {
+        openEditCardEditor(targetCard);
+    } else {
+        setSearchQuery(term);
+        setViewMode('All');
+        setActiveStack(null);
+        setIsSidebarOpen(false);
+    }
+  };
+
+  const handleEditorNavigation = (term: string) => {
+      // If we are navigating from within the editor, we might want to switch cards or close and search
+      if (term.startsWith('#')) {
+          closeEditor();
+          handleLinkClick(term);
+      } else {
+          // WikiLink
+          const targetCard = cards.find(c => c.title.toLowerCase() === term.toLowerCase());
+          if (targetCard) {
+              setEditingCardId(targetCard.id); // Switch card in editor
+          } else {
+              // Card not found, maybe search?
+              closeEditor();
+              handleLinkClick(term);
+          }
+      }
+  };
+
+  const handleViewChange = (mode: ViewMode, value: string | null = null) => {
+      setViewMode(mode);
+      if (mode === 'Stack') {
+          setActiveStack(value);
+          setActiveType(null);
+      } else if (mode === 'Type') {
+          setActiveType(value as CardType);
+          setActiveStack(null);
+      } else {
+          setActiveStack(null);
+          setActiveType(null);
+      }
+      setIsSidebarOpen(false);
+  };
+
+  const openNewCardEditor = () => {
+    setEditingCardId(null);
+    setIsEditorOpen(true);
+  };
+
+  const openEditCardEditor = (card: Card) => {
+    if (isSelectionMode) {
+        handleSelectCard(card.id);
+        return;
+    }
+    setEditingCardId(card.id);
+    setIsEditorOpen(true);
+  };
+
+  const closeEditor = () => {
+    setIsEditorOpen(false);
+    setEditingCardId(null);
+  };
+
+  // Scroll to random card logic
+  const handleRandomCard = () => {
+    if (filteredCards.length === 0) return;
+    
+    // Simple random selection
+    const randomIndex = Math.floor(Math.random() * filteredCards.length);
+    const card = filteredCards[randomIndex];
+    
+    // Find element and scroll
+    const el = document.getElementById(`card-${card.id}`);
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Add a temporary highlight effect class manually since Tailwind config is static
+        el.style.transition = 'transform 0.2s, box-shadow 0.2s';
+        el.style.transform = 'scale(1.02)';
+        el.style.boxShadow = '0 0 0 4px rgba(6, 182, 212, 0.5)'; // Cyan ring
+        
+        setTimeout(() => {
+            el.style.transform = '';
+            el.style.boxShadow = '';
+        }, 1000);
+    }
+  };
+
+  const handleHome = () => {
+    setSearchQuery('');
+    setViewMode('All');
+    setActiveStack(null);
+    setActiveType(null);
+  };
+
+  // Workflowy Copy Function
+  const handleExportOPML = () => {
+    // Determine which cards to export
+    const exportCards = filteredCards;
+    if (exportCards.length === 0) {
+        alert('出力するカードがありません。');
+        return;
+    }
+
+    // Group by stack for structure, or "Unstacked"
+    const grouped: Record<string, Card[]> = {};
+    exportCards.forEach(card => {
+        const stacks = card.stacks && card.stacks.length > 0 ? card.stacks : ['Unstacked'];
+        stacks.forEach(s => {
+            if (!grouped[s]) grouped[s] = [];
+            grouped[s].push(card);
+        });
+    });
+
+    // Generate OPML
+    let opmlBody = '';
+    
+    // Helper to escape XML
+    const escapeXml = (unsafe: string) => {
+        return unsafe.replace(/[<>&'"]/g, (c) => {
+            switch (c) {
+                case '<': return '&lt;';
+                case '>': return '&gt;';
+                case '&': return '&amp;';
+                case '\'': return '&apos;';
+                case '"': return '&quot;';
+                default: return c;
+            }
+        });
+    };
+
+    Object.entries(grouped).forEach(([stackName, stackCards]) => {
+        opmlBody += `<outline text="${escapeXml(stackName)}">\n`;
+        stackCards.forEach(card => {
+            const dateStr = formatDate(card.createdAt);
+            opmlBody += `  <outline text="${escapeXml(card.title)}" _note="${escapeXml(dateStr)}">\n`;
+            // Split body by newlines to make grandchildren
+            const lines = card.body.split('\n');
+            lines.forEach(line => {
+                if (line.trim()) {
+                    opmlBody += `    <outline text="${escapeXml(line)}" />\n`;
+                }
+            });
+            opmlBody += `  </outline>\n`;
+        });
+        opmlBody += `</outline>\n`;
+    });
+
+    const opml = `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+<head>
+    <title>PoIC Digital Export</title>
+</head>
+<body>
+${opmlBody}
+</body>
+</opml>`;
+
+    navigator.clipboard.writeText(opml).then(() => {
+        alert('OPMLをコピーしました！');
+    }).catch(err => {
+        console.error('Copy failed', err);
+        alert('コピーに失敗しました');
+    });
+  };
+
+  // --- Derived State (Memoized) ---
+  const allStacks = useMemo(() => {
+    const stackMap = new Map<string, number>();
+    cards.forEach(c => c.stacks?.forEach(s => {
+        stackMap.set(s, (stackMap.get(s) || 0) + 1);
+    }));
+    // Return array of objects { name, count } sorted by name
+    return Array.from(stackMap.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([name, count]) => ({ name, count }));
+  }, [cards]);
+  
+  const allTitles = useMemo(() => {
+      return Array.from(new Set(cards.map(c => c.title)));
+  }, [cards]);
+  
+  // Calculate stacks present in selected cards for the batch tag modal
+  const commonStacks = useMemo(() => {
+      const stacks = new Set<string>();
+      cards.forEach(c => {
+          if (selectedCardIds.has(c.id)) {
+              c.stacks?.forEach(s => stacks.add(s));
+          }
+      });
+      return Array.from(stacks).sort();
+  }, [cards, selectedCardIds]);
+
+  const stats: PoicStats = useMemo(() => ({
+    total: cards.length,
+    record: cards.filter(c => c.type === CardType.Record).length,
+    discovery: cards.filter(c => c.type === CardType.Discovery).length,
+    gtd: cards.filter(c => c.type === CardType.GTD && !c.completed).length,
+    reference: cards.filter(c => c.type === CardType.Reference).length,
+  }), [cards]);
+
+  const filteredCards = useMemo(() => {
+    let result = cards;
+
+    // 1. Text Search
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(c => 
+        c.title.toLowerCase().includes(q) || 
+        c.body.toLowerCase().includes(q) ||
+        c.stacks?.some(s => s.toLowerCase().includes(q))
+      );
+    }
+
+    // 2. View Mode / Filter
+    if (viewMode === 'Stack' && activeStack) {
+      result = result.filter(c => c.stacks?.includes(activeStack));
+    } else if (viewMode === 'GTD') {
+      result = result.filter(c => c.type === CardType.GTD);
+    } else if (viewMode === 'Type' && activeType) {
+        result = result.filter(c => c.type === activeType);
+    }
+
+    // 3. Sorting
+    if (viewMode === 'GTD') {
+      result = [...result].sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return a.dueDate - b.dueDate;
+      });
+    }
+
+    return result;
+  }, [cards, viewMode, activeStack, activeType, searchQuery]);
+
+  const activeCardForEditor = useMemo(() => {
+    if (!editingCardId) return undefined;
+    return cards.find(c => c.id === editingCardId);
+  }, [editingCardId, cards]);
+
+  // Backlinks Logic
+  const activeCardBacklinks = useMemo(() => {
+      if (!activeCardForEditor) return [];
+      const title = activeCardForEditor.title;
+      if (!title) return [];
+      // Escape for regex
+      const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Case insensitive match for [[Title]]
+      const regex = new RegExp(`\\[\\[${escapedTitle}\\]\\]`, 'i');
+      
+      return cards.filter(c => c.id !== activeCardForEditor.id && regex.test(c.body));
+  }, [activeCardForEditor, cards]);
+
+  const gtdGroups = useMemo(() => {
+    if (viewMode !== 'GTD') return null;
+    
+    const groups: Record<string, Card[]> = {
+      '期限切れ': [],
+      '今日': [],
+      '明日以降': [],
+      '期限なし': [],
+      '完了': []
+    };
+
+    filteredCards.forEach(card => {
+      if (card.completed) {
+        groups['完了'].push(card);
+        return;
+      }
+      if (!card.dueDate) {
+        groups['期限なし'].push(card);
+        return;
+      }
+      
+      const label = getRelativeDateLabel(card.dueDate);
+      if (label === 'Overdue') groups['期限切れ'].push(card);
+      else if (label === 'Today') groups['今日'].push(card);
+      else if (label === 'Tomorrow') groups['明日以降'].push(card);
+      else groups['明日以降'].push(card);
+    });
+
+    return groups;
+  }, [filteredCards, viewMode]);
+
+  return (
+    <div className="h-screen flex font-sans text-ink bg-stone-200 overflow-hidden">
+      
+      {/* Mobile Overlay */}
+      {isSidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black/20 z-40 md:hidden backdrop-blur-sm"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+      )}
+      
+      {/* Batch Tagging Modal */}
+      {showBatchTagModal && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]">
+              <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200">
+                  <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2">
+                      <Tag size={20} />
+                      タグの管理
+                  </h3>
+                  
+                  <div className="mb-4">
+                      <label className="text-xs font-bold text-stone-400 uppercase block mb-1">タグを追加</label>
+                      <div className="flex gap-2">
+                          <input 
+                            type="text" 
+                            className="flex-1 border border-stone-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            placeholder="タグ名を入力"
+                            value={batchTagInput}
+                            onChange={(e) => setBatchTagInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleBatchAddTag()}
+                          />
+                          <button 
+                            onClick={handleBatchAddTag}
+                            className="bg-stone-800 text-white px-3 py-1.5 rounded text-sm hover:bg-stone-900 transition-colors"
+                          >
+                              追加
+                          </button>
+                      </div>
+                  </div>
+                  
+                  <div className="mb-6">
+                      <label className="text-xs font-bold text-stone-400 uppercase block mb-2">現在のタグ (クリックして削除)</label>
+                      <div className="flex flex-wrap gap-2">
+                          {commonStacks.map(stack => (
+                              <button
+                                key={stack}
+                                onClick={() => handleBatchRemoveTag(stack)}
+                                className="bg-stone-100 text-stone-600 px-2 py-1 rounded text-sm hover:bg-red-100 hover:text-red-600 hover:line-through transition-colors"
+                              >
+                                  #{stack}
+                              </button>
+                          ))}
+                          {commonStacks.length === 0 && <span className="text-sm text-stone-400 italic">タグなし</span>}
+                      </div>
+                  </div>
+                  
+                  <div className="flex justify-end">
+                      <button 
+                          onClick={() => setShowBatchTagModal(false)}
+                          className="px-4 py-2 rounded-md bg-stone-100 text-stone-600 hover:bg-stone-200 font-medium transition-colors"
+                      >
+                          閉じる
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+      
+      {/* Batch Delete Confirmation Overlay */}
+      {showBatchDeleteConfirm && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]">
+              <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200">
+                  <div className="flex flex-col items-center text-center gap-3 mb-6">
+                      <div className="bg-red-100 p-3 rounded-full text-red-600">
+                          <AlertTriangle size={32} />
+                      </div>
+                      <h3 className="text-lg font-bold text-stone-800">カードを削除しますか？</h3>
+                      <p className="text-sm text-stone-500">{selectedCardIds.size}枚のカードを削除します。この操作は元に戻せません。</p>
+                  </div>
+                  <div className="flex gap-3">
+                      <button 
+                          onClick={() => setShowBatchDeleteConfirm(false)}
+                          className="flex-1 px-4 py-2 rounded-md bg-stone-100 text-stone-600 hover:bg-stone-200 font-medium transition-colors"
+                      >
+                          キャンセル
+                      </button>
+                      <button 
+                          onClick={confirmBatchDelete}
+                          className="flex-1 px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 font-bold transition-colors shadow-sm"
+                      >
+                          削除する
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Editor Modal Overlay */}
+      {isEditorOpen && (
+        <div 
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-8 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={(e) => {
+                if (e.target === e.currentTarget) closeEditor();
+            }}
+        >
+            <div className="w-full max-w-3xl h-full max-h-[85vh] animate-in zoom-in-95 duration-200 shadow-2xl rounded-lg">
+                <Editor 
+                    initialCard={activeCardForEditor}
+                    allTitles={allTitles}
+                    availableStacks={allStacks.map(s => s.name)}
+                    onSave={handleSaveCard} 
+                    onCancel={closeEditor}
+                    onDelete={handleDeleteCard}
+                    onNavigate={handleEditorNavigation}
+                    backlinks={activeCardBacklinks}
+                />
+            </div>
+        </div>
+      )}
+
+      {/* Sidebar */}
+      <aside className={`
+          fixed top-0 bottom-0 left-0 w-64 bg-paper-dark border-r border-stone-300 flex flex-col z-50
+          transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 md:static'}
+      `}>
+        <div className="p-6 border-b border-stone-200/50 flex justify-between items-center">
+            <div>
+                <h1 className="font-serif font-bold text-2xl tracking-tighter text-stone-800">PoIC Digital</h1>
+                <p className="text-xs text-stone-400 mt-1 uppercase tracking-widest">Pile of Index Cards</p>
+            </div>
+            <button className="md:hidden text-stone-500" onClick={() => setIsSidebarOpen(false)}>
+                <X size={20} />
+            </button>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto p-4 space-y-6">
+            <div className="space-y-1">
+                <button 
+                  onClick={() => handleViewChange('All')}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium transition-colors ${viewMode === 'All' ? 'bg-white shadow-sm text-stone-900 border border-stone-100' : 'text-stone-500 hover:text-stone-900'}`}
+                >
+                    <Library size={18} /> すべてのカード
+                    <span className="ml-auto text-xs text-stone-400">{stats.total}</span>
+                </button>
+                <button 
+                  onClick={() => handleViewChange('GTD')}
+                  className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium transition-colors ${viewMode === 'GTD' ? 'bg-white shadow-sm text-green-700 border border-green-100' : 'text-stone-500 hover:text-green-700'}`}
+                >
+                    <CheckSquare size={18} /> GTD タスク
+                    <span className="ml-auto text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{stats.gtd}</span>
+                </button>
+            </div>
+
+            <div>
+                <h3 className="px-3 text-xs font-bold text-stone-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <Tag size={12} /> タグ
+                </h3>
+                <div className="space-y-1">
+                    {allStacks.map(stack => (
+                        <button
+                            key={stack.name}
+                            onClick={() => handleViewChange('Stack', stack.name)}
+                            className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors flex justify-between items-center ${activeStack === stack.name ? 'bg-stone-200 text-stone-900 font-medium' : 'text-stone-500 hover:text-stone-800'}`}
+                        >
+                            <span className="truncate">{stack.name}</span>
+                            <span className="text-xs bg-stone-200/50 px-1.5 py-0.5 rounded-full text-stone-400">{stack.count}</span>
+                        </button>
+                    ))}
+                    {allStacks.length === 0 && (
+                        <p className="px-3 text-xs text-stone-300 italic">No tags yet</p>
+                    )}
+                </div>
+            </div>
+
+            <div className="pt-4 border-t border-stone-200/50">
+               <div className="grid grid-cols-2 gap-2 px-2">
+                  <button onClick={() => handleViewChange('Type', CardType.Record)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Record ? 'bg-blue-100 border-blue-300 shadow-inner' : 'bg-blue-50 border-blue-100 hover:bg-blue-100'}`}>
+                    <div className="text-xl font-bold text-blue-600">{stats.record}</div>
+                    <div className="text-[10px] uppercase text-blue-400">Record</div>
+                  </button>
+                  <button onClick={() => handleViewChange('Type', CardType.Discovery)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Discovery ? 'bg-red-100 border-red-300 shadow-inner' : 'bg-red-50 border-red-100 hover:bg-red-100'}`}>
+                    <div className="text-xl font-bold text-red-600">{stats.discovery}</div>
+                    <div className="text-[10px] uppercase text-red-400">Idea</div>
+                  </button>
+                  <button onClick={() => handleViewChange('Type', CardType.GTD)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.GTD ? 'bg-green-100 border-green-300 shadow-inner' : 'bg-green-50 border-green-100 hover:bg-green-100'}`}>
+                    <div className="text-xl font-bold text-green-600">{stats.gtd}</div>
+                    <div className="text-[10px] uppercase text-green-400">GTD</div>
+                  </button>
+                  <button onClick={() => handleViewChange('Type', CardType.Reference)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Reference ? 'bg-yellow-100 border-yellow-300 shadow-inner' : 'bg-yellow-50 border-yellow-100 hover:bg-yellow-100'}`}>
+                    <div className="text-xl font-bold text-yellow-600">{stats.reference}</div>
+                    <div className="text-[10px] uppercase text-yellow-400">Ref</div>
+                  </button>
+               </div>
+            </div>
+        </nav>
+      </aside>
+
+      {/* Main Content Area - Scrollable */}
+      <main className="flex-1 overflow-y-auto bg-stone-200">
+        
+        {/* Sticky Header */}
+        <header className="sticky top-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 mb-4 border-b border-stone-300/30">
+            <div className="flex items-center gap-3 flex-1">
+                <button 
+                    onClick={() => setIsSidebarOpen(true)}
+                    className="md:hidden text-stone-600 hover:bg-stone-300 p-2 rounded-md"
+                >
+                    <Menu size={20} />
+                </button>
+
+                {/* Home Button */}
+                <button 
+                    onClick={handleHome}
+                    title="すべて表示"
+                    className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"
+                >
+                    <Home size={20} />
+                </button>
+
+                <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
+                    <input 
+                        type="text"
+                        placeholder="検索..."
+                        className="w-full pl-9 pr-4 py-2 bg-white border border-stone-300/50 rounded-full text-sm focus:ring-2 focus:ring-stone-400 focus:border-stone-400 transition-all outline-none shadow-sm"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    {searchQuery && (
+                        <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs">
+                            クリア
+                        </button>
+                    )}
+                </div>
+                
+                {viewMode === 'GTD' && (
+                    <div className="hidden sm:flex items-center gap-2 text-xs text-stone-500 bg-white px-3 py-1.5 rounded-full border border-stone-200 shadow-sm">
+                        <Filter size={12} />
+                        <span>並び順: 期限</span>
+                    </div>
+                )}
+            </div>
+
+            <div className="ml-4 flex items-center gap-2">
+                {/* Random Button */}
+                <button
+                    onClick={handleRandomCard}
+                    title="ランダムにカードを表示"
+                    className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"
+                >
+                    <Shuffle size={20} />
+                </button>
+                
+                {/* Selection Mode Toggle */}
+                <button
+                    onClick={handleToggleSelection}
+                    title={isSelectionMode ? "選択モードを終了" : "複数選択"}
+                    className={`p-2 rounded-full transition-colors ${isSelectionMode ? 'bg-stone-800 text-white' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'}`}
+                >
+                    <SelectIcon size={20} />
+                </button>
+                
+                {/* Batch Actions Buttons */}
+                {isSelectionMode && selectedCardIds.size > 0 && (
+                    <>
+                        <button
+                            onClick={() => setShowBatchTagModal(true)}
+                            title="タグの管理"
+                            className="bg-stone-800 hover:bg-stone-900 text-white p-2 rounded-full shadow-lg transition-colors flex items-center gap-2"
+                        >
+                            <Tag size={20} />
+                        </button>
+                        <button
+                            onClick={handleClickDeleteSelected}
+                            title={`${selectedCardIds.size}枚のカードを削除`}
+                            className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full shadow-lg transition-colors flex items-center gap-2"
+                        >
+                            <Trash2 size={20} />
+                            <span className="text-xs font-bold hidden sm:inline">{selectedCardIds.size}</span>
+                        </button>
+                    </>
+                )}
+            </div>
+        </header>
+
+        {/* Scrollable Feed Content */}
+        <div className="px-2 sm:px-6 w-full max-w-[1920px] mx-auto pb-20">
+            
+            <div className="mb-4 flex items-center justify-between pl-2 border-l-4 border-stone-400">
+                <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">
+                    {viewMode === 'All' && (searchQuery ? `検索: "${searchQuery}"` : 'Dock (全カード)')}
+                    {viewMode === 'Stack' && `タグ: ${activeStack}`}
+                    {viewMode === 'Type' && `分類: ${activeType}`}
+                    {viewMode === 'GTD' && 'アクション'}
+                </h2>
+                <div className="flex items-center gap-2">
+                    {/* Export OPML Button */}
+                     <button 
+                        onClick={handleExportOPML}
+                        title="OPMLをコピー"
+                        className="flex items-center gap-1 text-xs font-mono text-stone-500 hover:text-stone-800 bg-stone-300/30 hover:bg-stone-300/60 px-2 py-1 rounded transition-colors"
+                    >
+                        <Copy size={12} />
+                        <span className="hidden sm:inline">OPML</span>
+                    </button>
+                    <span className="text-xs font-mono text-stone-500 bg-stone-300/50 px-2 py-1 rounded">{filteredCards.length} cards</span>
+                </div>
+            </div>
+
+            <div className={viewMode === 'GTD' ? '' : 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'}>
+                {viewMode === 'GTD' && gtdGroups ? (
+                    <div className="space-y-6">
+                        {(Object.entries(gtdGroups) as [string, Card[]][]).map(([groupName, groupCards]) => (
+                            groupCards.length > 0 && (
+                                <div key={groupName}>
+                                    <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 pl-2 border-l-2 ${
+                                        groupName === '期限切れ' ? 'border-red-500 text-red-500' : 
+                                        groupName === '今日' ? 'border-green-500 text-green-600' : 'border-stone-400 text-stone-500'
+                                    }`}>
+                                        {groupName}
+                                    </h3>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start"> 
+                                        {groupCards.map((card) => (
+                                            <CardItem 
+                                                key={card.id} 
+                                                domId={`card-${card.id}`}
+                                                card={card} 
+                                                onClick={openEditCardEditor}
+                                                onLinkClick={handleLinkClick}
+                                                onToggleComplete={toggleGTDComplete}
+                                                onStackClick={(s) => handleViewChange('Stack', s)}
+                                                isSelectionMode={isSelectionMode}
+                                                isSelected={selectedCardIds.has(card.id)}
+                                                onSelect={handleSelectCard}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            )
+                        ))}
+                    </div>
+                ) : (
+                    <>
+                        {filteredCards.map((card, index) => {
+                             const prevCard = filteredCards[index - 1];
+                             const currentMonth = new Date(card.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' });
+                             const prevMonth = prevCard ? new Date(prevCard.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' }) : null;
+                             const showDivider = index > 0 && currentMonth !== prevMonth;
+
+                             return (
+                                <React.Fragment key={card.id}>
+                                    {showDivider && (
+                                        <div className="col-span-full flex items-center gap-2 my-4 px-2 opacity-60">
+                                            <div className="h-px flex-1 bg-stone-300"></div>
+                                            <span className="text-xs font-mono font-bold text-stone-500">{currentMonth}</span>
+                                            <div className="h-px flex-1 bg-stone-300"></div>
+                                        </div>
+                                    )}
+                                    <CardItem 
+                                        domId={`card-${card.id}`}
+                                        card={card} 
+                                        onClick={openEditCardEditor}
+                                        onLinkClick={handleLinkClick}
+                                        onToggleComplete={toggleGTDComplete}
+                                        onStackClick={(s) => handleViewChange('Stack', s)}
+                                        isSelectionMode={isSelectionMode}
+                                        isSelected={selectedCardIds.has(card.id)}
+                                        onSelect={handleSelectCard}
+                                    />
+                                </React.Fragment>
+                             );
+                        })}
+                        
+                        {filteredCards.length === 0 && (
+                            <div className="col-span-full text-center py-20 opacity-50">
+                                <Library size={48} className="mx-auto mb-4 text-stone-400" />
+                                <p className="text-stone-500 font-serif italic">カードが見つかりません。</p>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+        </div>
+        
+        {/* Floating Action Button - New Card */}
+        {!isSelectionMode && (
+            <button 
+                onClick={openNewCardEditor}
+                className="fixed bottom-6 right-6 z-40 bg-stone-800 hover:bg-stone-900 text-white p-4 rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
+            >
+                <Plus size={24} />
+            </button>
+        )}
+      </main>
+    </div>
+  );
+}
