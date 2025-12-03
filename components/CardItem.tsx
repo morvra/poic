@@ -1,18 +1,18 @@
 import React from 'react';
 import { Card, CardType } from '../types';
-import { formatDate, formatTimestampByPattern } from '../utils';
+import { formatTimestampByPattern, formatDateWithDay } from '../utils';
 import { CardRenderer } from './CardRenderer';
-import { Clock, CheckCircle, Circle, FileText, Lightbulb, CheckSquare, BookOpen, Square } from 'lucide-react';
+import { Clock, CheckCircle, Circle, FileText, Lightbulb, CheckSquare, BookOpen, Square, Trash2 } from 'lucide-react';
 
 interface CardItemProps {
   card: Card;
-  dateFormat: string; // Receive dateFormat from App
+  dateFormat: string; // Receive dateFormat
   onClick: (card: Card) => void;
   onLinkClick: (term: string) => void;
   onToggleComplete?: (id: string) => void;
   onStackClick?: (stack: string) => void;
   style?: React.CSSProperties;
-  domId?: string; // For scrolling
+  domId?: string; 
   
   // Selection props
   isSelectionMode?: boolean;
@@ -119,12 +119,12 @@ export const CardItem: React.FC<CardItemProps> = ({
         <div className="flex flex-wrap items-center gap-3 text-[13px] text-stone-400 font-mono mb-2 leading-none">
              <span className="flex items-center gap-1">
                 <Clock size={12} />
-                {/* Use configurable date format */}
+                {/* Use configurable date format with Day of Week */}
                 {formatTimestampByPattern(new Date(card.createdAt), dateFormat)}
              </span>
              {isGTD && card.dueDate && (
                 <span className={`flex items-center gap-1 ${card.dueDate < Date.now() && !card.completed ? 'text-red-500 font-bold' : ''}`}>
-                  Due: {new Date(card.dueDate).toLocaleDateString('ja-JP')}
+                  Due: {formatDateWithDay(card.dueDate)}
                 </span>
              )}
              {card.stacks && card.stacks.length > 0 && (
@@ -143,7 +143,7 @@ export const CardItem: React.FC<CardItemProps> = ({
         </div>
 
         {/* Body Preview */}
-        <div className="relative mb-auto">
+        <div className="relative mt-auto">
              <div className="line-clamp-3 font-sans text-sm text-ink/90 leading-relaxed">
                 <CardRenderer content={card.body} onLinkClick={onLinkClick} />
              </div>
