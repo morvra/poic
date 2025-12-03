@@ -1,11 +1,12 @@
 import React from 'react';
 import { Card, CardType } from '../types';
-import { formatDate } from '../utils';
+import { formatDate, formatTimestampByPattern } from '../utils';
 import { CardRenderer } from './CardRenderer';
 import { Clock, CheckCircle, Circle, FileText, Lightbulb, CheckSquare, BookOpen, Square } from 'lucide-react';
 
 interface CardItemProps {
   card: Card;
+  dateFormat: string; // Receive dateFormat from App
   onClick: (card: Card) => void;
   onLinkClick: (term: string) => void;
   onToggleComplete?: (id: string) => void;
@@ -50,7 +51,7 @@ const TypeIcon = ({ type, className }: { type: CardType, className?: string }) =
 };
 
 export const CardItem: React.FC<CardItemProps> = ({ 
-  card, onClick, onLinkClick, onToggleComplete, onStackClick, style, domId,
+  card, dateFormat, onClick, onLinkClick, onToggleComplete, onStackClick, style, domId,
   isSelectionMode, isSelected, onSelect
 }) => {
   const isGTD = card.type === CardType.GTD;
@@ -95,7 +96,7 @@ export const CardItem: React.FC<CardItemProps> = ({
                     <span className="hidden sm:inline">{SHORT_TYPE_NAMES[card.type]}</span>
                 </div>
                 
-                {/* Title - Reduced font size */}
+                {/* Title */}
                 <h3 className={`font-bold text-ink text-[16px] leading-tight truncate group-hover:text-stone-700 transition-colors ${card.completed ? 'text-stone-400' : ''}`}>
                   {card.title}
                 </h3>
@@ -118,7 +119,8 @@ export const CardItem: React.FC<CardItemProps> = ({
         <div className="flex flex-wrap items-center gap-3 text-[13px] text-stone-400 font-mono mb-2 leading-none">
              <span className="flex items-center gap-1">
                 <Clock size={12} />
-                {formatDate(card.createdAt)}
+                {/* Use configurable date format */}
+                {formatTimestampByPattern(new Date(card.createdAt), dateFormat)}
              </span>
              {isGTD && card.dueDate && (
                 <span className={`flex items-center gap-1 ${card.dueDate < Date.now() && !card.completed ? 'text-red-500 font-bold' : ''}`}>
@@ -140,7 +142,7 @@ export const CardItem: React.FC<CardItemProps> = ({
              )}
         </div>
 
-        {/* Body Preview - 3 lines - Reduced font size */}
+        {/* Body Preview */}
         <div className="relative mb-auto">
              <div className="line-clamp-3 font-sans text-sm text-ink/90 leading-relaxed">
                 <CardRenderer content={card.body} onLinkClick={onLinkClick} />

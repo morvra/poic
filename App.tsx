@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardType, ViewMode, PoicStats } from './types';
-import { generateId, getRelativeDateLabel, formatDate } from './utils';
+import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern } from './utils'; // Import updated util
 import { getAuthUrl, parseTokenFromUrl, uploadToDropbox, downloadFromDropbox } from './utils/dropbox'; 
 import { CardItem } from './components/CardItem';
 import { Editor } from './components/Editor';
-import { SettingsModal } from './components/SettingsModal'; // Import new modal
+import { SettingsModal } from './components/SettingsModal'; 
 import { 
   Library, 
   Layers, 
@@ -24,7 +24,7 @@ import {
   Tag,
   Cloud,
   RefreshCw,
-  Settings // Import Settings icon
+  Settings 
 } from 'lucide-react';
 
 // Enhanced initial data with 10 varied cards
@@ -452,7 +452,8 @@ export default function App() {
     Object.entries(grouped).forEach(([stackName, stackCards]) => {
         opmlBody += `<outline text="${escapeXml(stackName)}">\n`;
         stackCards.forEach(card => {
-            const dateStr = formatDate(card.createdAt);
+            // Use user-configured date format for OPML notes
+            const dateStr = formatTimestampByPattern(new Date(card.createdAt), dateFormat);
             opmlBody += `  <outline text="${escapeXml(card.title)}" _note="${escapeXml(dateStr)}">\n`;
             const lines = card.body.split('\n');
             lines.forEach(line => {
@@ -536,7 +537,6 @@ ${opmlBody}
         result = result.filter(c => c.type === activeType);
     }
     
-    // Sort logic
     if (viewMode === 'GTD') {
       result = [...result].sort((a, b) => {
         if (a.completed !== b.completed) return a.completed ? 1 : -1;
@@ -545,7 +545,6 @@ ${opmlBody}
         return a.dueDate - b.dueDate;
       });
     } else {
-        // Sort by Created At Descending (Newest first)
         result = [...result].sort((a, b) => b.createdAt - a.createdAt);
     }
     return result;
@@ -604,8 +603,6 @@ ${opmlBody}
           />
       )}
       
-      {/* ... (Previous Overlays) */}
-      
       <SettingsModal 
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -613,6 +610,7 @@ ${opmlBody}
         onDateFormatChange={handleDateFormatChange}
       />
 
+      {/* ... (Modal overlays) ... */}
       {showBatchTagModal && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]">
               <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200">
@@ -673,7 +671,7 @@ ${opmlBody}
                     initialCard={activeCardForEditor}
                     allTitles={allTitles}
                     availableStacks={allStacks.map(s => s.name)}
-                    dateFormat={dateFormat} // Pass date format
+                    dateFormat={dateFormat}
                     onSave={handleSaveCard} 
                     onCancel={closeEditor}
                     onDelete={handleDeleteCard}
@@ -684,12 +682,13 @@ ${opmlBody}
         </div>
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar ... */}
       <aside className={`
           fixed top-0 bottom-0 left-0 w-64 bg-paper-dark border-r border-stone-300 flex flex-col z-50
           transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 md:static'}
       `}>
+        {/* ... Sidebar header and nav ... */}
         <div className="p-6 border-b border-stone-200/50 flex justify-between items-center">
             <div>
                 <h1 className="font-serif font-bold text-2xl tracking-tighter text-stone-800">PoIC Digital</h1>
@@ -701,7 +700,6 @@ ${opmlBody}
         </div>
 
         <nav className="flex-1 overflow-y-auto p-4 space-y-6">
-            {/* ... (Previous Sections) ... */}
             <div className="space-y-1">
                 <button onClick={() => handleViewChange('All')} className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium transition-colors ${viewMode === 'All' ? 'bg-white shadow-sm text-stone-900 border border-stone-100' : 'text-stone-500 hover:text-stone-900'}`}>
                     <Library size={18} /> すべてのカード
@@ -784,7 +782,6 @@ ${opmlBody}
                 )}
             </div>
 
-            {/* Settings Link */}
             <div className="pt-4 border-t border-stone-200/50">
                 <button 
                     onClick={() => setIsSettingsOpen(true)}
@@ -797,10 +794,9 @@ ${opmlBody}
         </nav>
       </aside>
 
-      {/* Main Content Area... */}
+      {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto bg-stone-200">
-        {/* ... (Existing Content) ... */}
-        {/* Sticky Header */}
+        {/* Sticky Header... (Same as before) */}
         <header className="sticky top-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 mb-4 border-b border-stone-300/30">
             <div className="flex items-center gap-3 flex-1">
                 <button onClick={() => setIsSidebarOpen(true)} className="md:hidden text-stone-600 hover:bg-stone-300 p-2 rounded-md">
@@ -861,6 +857,7 @@ ${opmlBody}
                                                 key={card.id} 
                                                 domId={`card-${card.id}`}
                                                 card={card} 
+                                                dateFormat={dateFormat} // Pass date format
                                                 onClick={openEditCardEditor}
                                                 onLinkClick={handleLinkClick}
                                                 onToggleComplete={toggleGTDComplete}
@@ -895,6 +892,7 @@ ${opmlBody}
                                     <CardItem 
                                         domId={`card-${card.id}`}
                                         card={card} 
+                                        dateFormat={dateFormat} // Pass date format
                                         onClick={openEditCardEditor}
                                         onLinkClick={handleLinkClick}
                                         onToggleComplete={toggleGTDComplete}
