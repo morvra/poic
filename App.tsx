@@ -479,7 +479,8 @@ ${opmlBody}
     total: cards.length,
     record: cards.filter(c => c.type === CardType.Record).length,
     discovery: cards.filter(c => c.type === CardType.Discovery).length,
-    gtd: cards.filter(c => c.type === CardType.GTD && !c.completed).length,
+    gtdActive: cards.filter(c => c.type === CardType.GTD && !c.completed).length, // Only active
+    gtdTotal: cards.filter(c => c.type === CardType.GTD).length, // All
     reference: cards.filter(c => c.type === CardType.Reference).length,
   }), [cards]);
 
@@ -500,6 +501,8 @@ ${opmlBody}
     } else if (viewMode === 'Type' && activeType) {
         result = result.filter(c => c.type === activeType);
     }
+    
+    // Sort logic
     if (viewMode === 'GTD') {
       result = [...result].sort((a, b) => {
         if (a.completed !== b.completed) return a.completed ? 1 : -1;
@@ -507,6 +510,9 @@ ${opmlBody}
         if (!b.dueDate) return -1;
         return a.dueDate - b.dueDate;
       });
+    } else {
+        // Sort by Created At Descending (Newest first)
+        result = [...result].sort((a, b) => b.createdAt - a.createdAt);
     }
     return result;
   }, [cards, viewMode, activeStack, activeType, searchQuery]);
@@ -659,7 +665,7 @@ ${opmlBody}
                 </button>
                 <button onClick={() => handleViewChange('GTD')} className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium transition-colors ${viewMode === 'GTD' ? 'bg-white shadow-sm text-green-700 border border-green-100' : 'text-stone-500 hover:text-green-700'}`}>
                     <CheckSquare size={18} /> GTD タスク
-                    <span className="ml-auto text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{stats.gtd}</span>
+                    <span className="ml-auto text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{stats.gtdActive}</span>
                 </button>
             </div>
 
@@ -674,7 +680,7 @@ ${opmlBody}
                     <div className="text-[10px] uppercase text-red-400">Idea</div>
                   </button>
                   <button onClick={() => handleViewChange('Type', CardType.GTD)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.GTD ? 'bg-green-100 border-green-300 shadow-inner' : 'bg-green-50 border-green-100 hover:bg-green-100'}`}>
-                    <div className="text-xl font-bold text-green-600">{stats.gtd}</div>
+                    <div className="text-xl font-bold text-green-600">{stats.gtdTotal}</div>
                     <div className="text-[10px] uppercase text-green-400">GTD</div>
                   </button>
                   <button onClick={() => handleViewChange('Type', CardType.Reference)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Reference ? 'bg-yellow-100 border-yellow-300 shadow-inner' : 'bg-yellow-50 border-yellow-100 hover:bg-yellow-100'}`}>
