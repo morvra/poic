@@ -74,7 +74,6 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
   // Focus Title on New Card
   useEffect(() => {
       if (!initialCard && titleInputRef.current) {
-          // Delay slightly to ensure modal animation is done or element is ready
           setTimeout(() => {
               titleInputRef.current?.focus();
           }, 50);
@@ -135,7 +134,6 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
   // Focus textarea when switching to edit mode
   useEffect(() => {
       if (isEditingBody && bodyRef.current) {
-          // Only focus body if NOT a new card (new cards focus title) or if explicitly toggled
           if (initialCard) {
               bodyRef.current.focus();
           }
@@ -164,7 +162,7 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
         }
       }
 
-      // Autocomplete Navigation logic (omitted for brevity, assume same as before)
+      // Autocomplete Navigation
       if (showWikiSuggestions) {
           if (e.key === 'ArrowDown') {
               e.preventDefault();
@@ -407,9 +405,9 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
           </button>
       </div>
 
-      <div ref={containerRef} className="flex-1 overflow-y-auto p-6 sm:p-10 pb-20">
+      <div ref={containerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 pb-20">
         {/* Type & Date Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
             <div className="flex gap-2">
                 {(Object.values(CardType) as CardType[]).map((t) => (
                 <button
@@ -440,7 +438,7 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
         </div>
 
         {/* Title & Complete Toggle */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center gap-4 mb-4">
             <input
                 ref={titleInputRef}
                 type="text"
@@ -461,7 +459,7 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
         </div>
 
         {/* Metadata Inputs */}
-        <div className="flex flex-wrap gap-4 mb-8 relative">
+        <div className="flex flex-wrap gap-4 mb-4 relative">
             {type === CardType.GTD && (
                 <div className="flex items-center gap-2 text-stone-600 text-sm bg-stone-100/50 px-3 py-1.5 rounded border border-stone-200">
                     <span className="text-xs font-bold uppercase">Due:</span>
@@ -502,12 +500,12 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
         </div>
 
         {/* Body Editor with Click-to-Edit */}
-        <div className="relative min-h-[50vh]">
+        <div className="relative min-h-[150px]">
             {isEditingBody ? (
                 <>
                     <textarea
                         ref={bodyRef}
-                        className="w-full h-full min-h-[50vh] resize-none border-none focus:outline-none bg-transparent text-[17px] font-sans leading-relaxed text-ink/90 placeholder-stone-300"
+                        className="w-full h-full min-h-[150px] resize-none border-none focus:outline-none bg-transparent text-[17px] font-sans leading-relaxed text-ink/90 placeholder-stone-300"
                         placeholder="内容を入力... (Alt+T: タイムスタンプ, [[ : リンク)"
                         value={body}
                         onChange={handleBodyChange}
@@ -548,7 +546,7 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
                 <div 
                     ref={readViewRef}
                     onClick={handleViewModeClick}
-                    className="w-full h-full min-h-[50vh] cursor-text"
+                    className="w-full h-full min-h-[150px] cursor-text"
                 >
                     <CardRenderer 
                         content={body || '内容なし'} 
