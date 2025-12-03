@@ -49,6 +49,7 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
 
   const containerRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const readViewRef = useRef<HTMLDivElement>(null);
   const stackInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -69,6 +70,16 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
         containerRef.current.scrollTop = 0;
     }
   }, [initialCard?.id]);
+
+  // Focus Title on New Card
+  useEffect(() => {
+      if (!initialCard && titleInputRef.current) {
+          // Delay slightly to ensure modal animation is done or element is ready
+          setTimeout(() => {
+              titleInputRef.current?.focus();
+          }, 50);
+      }
+  }, [initialCard]);
 
   // Update state ONLY when ID changes to avoid overwriting during auto-save
   useEffect(() => {
@@ -124,15 +135,16 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
   // Focus textarea when switching to edit mode
   useEffect(() => {
       if (isEditingBody && bodyRef.current) {
-          bodyRef.current.focus();
+          // Only focus body if NOT a new card (new cards focus title) or if explicitly toggled
+          if (initialCard) {
+              bodyRef.current.focus();
+          }
           
           if (initialCursorOffset !== null) {
               const len = bodyRef.current.value.length;
               const pos = Math.min(Math.max(0, initialCursorOffset), len);
               bodyRef.current.setSelectionRange(pos, pos);
               setInitialCursorOffset(null);
-          } else if (!initialCard) {
-               bodyRef.current.setSelectionRange(0, 0);
           }
       }
   }, [isEditingBody]); 
@@ -430,12 +442,12 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
         {/* Title & Complete Toggle */}
         <div className="flex items-center gap-4 mb-6">
             <input
+                ref={titleInputRef}
                 type="text"
                 placeholder="タイトルなし"
                 className={`flex-1 min-w-0 text-xl sm:text-2xl font-bold font-sans text-ink placeholder-stone-300 border-none focus:outline-none bg-transparent p-0 ${completed ? 'text-stone-400' : ''}`}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                autoFocus={!initialCard}
             />
             {type === CardType.GTD && (
                 <button 
