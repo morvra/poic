@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardType, ViewMode, PoicStats } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern } from './utils';
-import { getAuthUrl, parseTokenFromUrl, uploadToDropbox, downloadFromDropbox } from './utils/dropbox'; 
+import { getAuthUrl, parseTokenFromUrl, uploadToDropbox, downloadFromDropbox } from './utils/dropbox'; // New Import
 import { CardItem } from './components/CardItem';
 import { Editor } from './components/Editor';
 import { SettingsModal } from './components/SettingsModal'; 
@@ -55,7 +55,11 @@ export default function App() {
   
   // Sidebar State
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile Overlay
-  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true); // Desktop Layout
+  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(() => {
+      // Load desktop sidebar state from localStorage
+      const saved = localStorage.getItem('poic-sidebar-state');
+      return saved !== null ? JSON.parse(saved) : true;
+  });
   
   // Selection Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -123,7 +127,9 @@ export default function App() {
 
   const toggleSidebar = () => {
       if (window.innerWidth >= 768) {
-          setIsDesktopSidebarOpen(!isDesktopSidebarOpen);
+          const newState = !isDesktopSidebarOpen;
+          setIsDesktopSidebarOpen(newState);
+          localStorage.setItem('poic-sidebar-state', JSON.stringify(newState));
       } else {
           setIsSidebarOpen(!isSidebarOpen);
       }
@@ -387,7 +393,6 @@ export default function App() {
           setActiveStack(null);
           setActiveType(null);
       }
-      // On mobile, close sidebar after selection
       if (window.innerWidth < 768) {
           setIsSidebarOpen(false);
       }
@@ -605,6 +610,11 @@ ${opmlBody}
     return groups;
   }, [filteredCards, viewMode]);
 
+  // Determine grid columns based on desktop sidebar state
+  const gridClasses = isDesktopSidebarOpen 
+    ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+    : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4";
+
   return (
     <div className="h-screen flex font-sans text-ink bg-stone-200 overflow-hidden">
       
@@ -703,14 +713,12 @@ ${opmlBody}
           md:relative md:translate-x-0
           ${isDesktopSidebarOpen ? 'md:w-64' : 'md:w-0 md:border-r-0 md:overflow-hidden'}
       `}>
-        {/* Force width on inner container to prevent text wrapping during transition */}
         <div className="w-64 flex flex-col h-full">
             <div className="p-6 border-b border-stone-200/50 flex justify-between items-center">
                 <div>
                     <h1 className="font-serif font-bold text-2xl tracking-tighter text-stone-800">PoIC Digital</h1>
                     <p className="text-xs text-stone-400 mt-1 uppercase tracking-widest">Pile of Index Cards</p>
                 </div>
-                {/* Mobile close button */}
                 <button className="md:hidden text-stone-500" onClick={() => setIsSidebarOpen(false)}>
                     <X size={20} />
                 </button>
@@ -814,7 +822,7 @@ ${opmlBody}
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto bg-stone-200">
-        {/* Sticky Header... (Same as before) */}
+        {/* Sticky Header */}
         <header className="sticky top-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 mb-4 border-b border-stone-300/30">
             <div className="flex items-center gap-3 flex-1">
                 {/* Unified Toggle Button */}
@@ -828,7 +836,6 @@ ${opmlBody}
                 <button onClick={handleHome} title="すべて表示" className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors">
                     <Home size={20} />
                 </button>
-                {/* ... Rest of Header ... */}
                 <div className="relative flex-1 max-w-md">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
                     <input type="text" placeholder="検索..." className="w-full pl-9 pr-4 py-2 bg-white border border-stone-300/50 rounded-full text-sm focus:ring-2 focus:ring-stone-400 focus:border-stone-400 transition-all outline-none shadow-sm" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
@@ -848,7 +855,7 @@ ${opmlBody}
             </div>
         </header>
 
-        {/* Scrollable Feed Content ... (Unchanged) */}
+        {/* Scrollable Feed Content */}
         <div className="px-2 sm:px-6 w-full max-w-[1920px] mx-auto pb-20">
             <div className="mb-4 flex items-center justify-between pl-2 border-l-4 border-stone-400">
                 <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">
@@ -863,7 +870,7 @@ ${opmlBody}
                 </div>
             </div>
 
-            <div className={viewMode === 'GTD' ? '' : 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'}>
+            <div className={viewMode === 'GTD' ? '' : gridClasses}>
                 {viewMode === 'GTD' && gtdGroups ? (
                     <div className="space-y-6">
                         {(Object.entries(gtdGroups) as [string, Card[]][]).map(([groupName, groupCards]) => (
@@ -875,7 +882,7 @@ ${opmlBody}
                                     }`}>
                                         {groupName}
                                     </h3>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start"> 
+                                    <div className={gridClasses + " items-start"}> 
                                         {groupCards.map((card) => (
                                             <CardItem 
                                                 key={card.id} 
