@@ -24,7 +24,8 @@ import {
   Tag,
   Cloud,
   RefreshCw,
-  Settings 
+  Settings,
+  CheckCheck // Import CheckCheck
 } from 'lucide-react';
 
 // Enhanced initial data with 10 varied cards
@@ -73,7 +74,7 @@ export default function App() {
   // Modal State
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
-  const [phantomCard, setPhantomCard] = useState<Partial<Card> | null>(null); // For creating new cards from links
+  const [phantomCard, setPhantomCard] = useState<Partial<Card> | null>(null);
 
   // Dropbox State
   const [dropboxToken, setDropboxToken] = useState<string | null>(localStorage.getItem('dropbox_token'));
@@ -264,7 +265,6 @@ export default function App() {
       
       if (!shouldClose) {
           setEditingCardId(newId);
-          // If we were creating a phantom card, clear it now that real card exists
           setPhantomCard(null);
       }
     }
@@ -379,22 +379,15 @@ export default function App() {
   };
 
   const handleEditorNavigation = (term: string) => {
-      // Close editor first if needed, or handle switching logic
-      // Simplest is to close current and handle link as if from main view
       if (term.startsWith('#')) {
           closeEditor();
           handleLinkClick(term);
       } else {
-          // Check if link exists
           const targetCard = cards.find(c => !c.isDeleted && c.title.toLowerCase() === term.toLowerCase());
           if (targetCard) {
-              // Switch to existing card
               setEditingCardId(targetCard.id); 
               setPhantomCard(null);
           } else {
-              // Create phantom from inside editor
-              // We need to trigger the same logic as handleLinkClick's else block, but keeping editor open?
-              // Or just switching editor content.
               setPhantomCard({
                   title: term,
                   type: CardType.Record,
@@ -647,10 +640,27 @@ ${opmlBody}
     ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
     : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4";
 
+  // Handle Select All
+  const handleSelectAll = () => {
+      const allIds = filteredCards.map(c => c.id);
+      const allSelected = allIds.every(id => selectedCardIds.has(id));
+      
+      if (allSelected) {
+          // Deselect all displayed cards
+          const newSelection = new Set(selectedCardIds);
+          allIds.forEach(id => newSelection.delete(id));
+          setSelectedCardIds(newSelection);
+      } else {
+          // Select all displayed cards
+          const newSelection = new Set(selectedCardIds);
+          allIds.forEach(id => newSelection.add(id));
+          setSelectedCardIds(newSelection);
+      }
+  };
+
   return (
     <div className="h-screen flex font-sans text-ink bg-stone-200 overflow-hidden">
       
-      {/* ... (Overlay and Modal code remains same) ... */}
       {/* Mobile Overlay */}
       {isSidebarOpen && (
           <div 
@@ -666,6 +676,7 @@ ${opmlBody}
         onDateFormatChange={handleDateFormatChange}
       />
 
+      {/* ... (Modal overlays) ... */}
       {showBatchTagModal && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]">
               <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200">
@@ -854,15 +865,17 @@ ${opmlBody}
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto bg-stone-200">
-        {/* Sticky Header... (Unchanged) */}
+        {/* Sticky Header */}
         <header className="sticky top-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 mb-4 border-b border-stone-300/30">
             <div className="flex items-center gap-3 flex-1">
+                {/* Unified Toggle Button */}
                 <button 
                     onClick={toggleSidebar} 
                     className="text-stone-600 hover:bg-stone-300 p-2 rounded-md transition-colors"
                 >
                     <Menu size={20} />
                 </button>
+                
                 <button onClick={handleHome} title="すべて表示" className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors">
                     <Home size={20} />
                 </button>
@@ -876,6 +889,22 @@ ${opmlBody}
             <div className="ml-4 flex items-center gap-2">
                 <button onClick={handleRandomCard} title="ランダムにカードを表示" className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"><Shuffle size={20} /></button>
                 <button onClick={handleToggleSelection} title={isSelectionMode ? "選択モードを終了" : "複数選択"} className={`p-2 rounded-full transition-colors ${isSelectionMode ? 'bg-stone-800 text-white' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'}`}><SelectIcon size={20} /></button>
+                
+                {/* Select All Button */}
+                {isSelectionMode && (
+                    <button
+                        onClick={handleSelectAll}
+                        title="表示中のカードをすべて選択"
+                        className={`p-2 rounded-full transition-colors ${
+                            filteredCards.length > 0 && filteredCards.every(c => selectedCardIds.has(c.id))
+                                ? 'bg-blue-100 text-blue-600'
+                                : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'
+                        }`}
+                    >
+                        <CheckCheck size={20} />
+                    </button>
+                )}
+
                 {isSelectionMode && selectedCardIds.size > 0 && (
                     <>
                         <button onClick={() => setShowBatchTagModal(true)} title="タグの管理" className="bg-stone-800 hover:bg-stone-900 text-white p-2 rounded-full shadow-lg transition-colors flex items-center gap-2"><Tag size={20} /></button>
