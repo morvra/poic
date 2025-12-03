@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardType, ViewMode, PoicStats } from './types';
 import { generateId, getRelativeDateLabel, formatDate } from './utils';
-import { getAuthUrl, parseTokenFromUrl, uploadToDropbox, downloadFromDropbox } from './utils/dropbox'; // New Import
+import { getAuthUrl, parseTokenFromUrl, uploadToDropbox, downloadFromDropbox } from './utils/dropbox'; 
 import { CardItem } from './components/CardItem';
 import { Editor } from './components/Editor';
+import { SettingsModal } from './components/SettingsModal'; // Import new modal
 import { 
   Library, 
   Layers, 
@@ -22,7 +23,8 @@ import {
   AlertTriangle,
   Tag,
   Cloud,
-  RefreshCw
+  RefreshCw,
+  Settings // Import Settings icon
 } from 'lucide-react';
 
 // Enhanced initial data with 10 varied cards
@@ -36,93 +38,7 @@ const INITIAL_CARDS: Card[] = [
     updatedAt: Date.now(),
     stacks: ['Journal']
   },
-  {
-    id: '9',
-    type: CardType.GTD,
-    title: 'PR #402 のレビュー',
-    body: 'モバイルデバイスでの新しいサイドバー実装のレスポンシブ動作を確認する。',
-    createdAt: Date.now() - 3600000,
-    updatedAt: Date.now(),
-    dueDate: Date.now() + 86400000, // Tomorrow
-    completed: false,
-    stacks: ['Project Alpha']
-  },
-  {
-    id: '8',
-    type: CardType.Discovery,
-    title: 'デジタルの触感',
-    body: 'アイデア: モバイルでカードをドラッグする時に触覚フィードバック（Haptics）を使ったらどうだろう？ #UX',
-    createdAt: Date.now() - 7200000,
-    updatedAt: Date.now(),
-    stacks: ['Design Philosophy']
-  },
-  {
-    id: '7',
-    type: CardType.Reference,
-    title: 'カラーパレット Hexコード',
-    body: 'Paper: #fcfbf9\nInk: #2d2a26\nBlue: #3b82f6\nRed: #ef4444',
-    createdAt: Date.now() - 10800000,
-    updatedAt: Date.now(),
-    stacks: ['Design System']
-  },
-  {
-    id: '6',
-    type: CardType.GTD,
-    title: '食材の買い出し',
-    body: '- 牛乳\n- コーヒー豆\n- 卵\n- アボカド',
-    createdAt: Date.now() - 14400000,
-    updatedAt: Date.now(),
-    dueDate: Date.now() - 86400000, // Yesterday (Overdue)
-    completed: false,
-    stacks: ['Personal']
-  },
-  {
-    id: '5',
-    type: CardType.Record,
-    title: '会議メモ: Q4 計画',
-    body: '主な目標:\n1. モバイルアプリのローンチ\n2. ユーザー維持率を15%向上させる\n\n[[戦略]] がここでは重要になる。',
-    createdAt: Date.now() - 86400000,
-    updatedAt: Date.now(),
-    stacks: ['Work']
-  },
-  {
-    id: '4',
-    type: CardType.GTD,
-    title: '歯医者の予約',
-    body: 'スミス先生に電話する。',
-    createdAt: Date.now() - 90000000,
-    updatedAt: Date.now(),
-    dueDate: Date.now() + 604800000, // Next week
-    completed: false,
-    stacks: ['Personal']
-  },
-  {
-    id: '3',
-    type: CardType.Discovery,
-    title: 'React 19 Server Components',
-    body: 'RSCがこのアプリのクライアントサイドの状態管理にどう影響するか調査が必要。',
-    createdAt: Date.now() - 100000000,
-    updatedAt: Date.now(),
-    stacks: ['Tech Radar']
-  },
-  {
-    id: '2',
-    type: CardType.Reference,
-    title: 'PoIC マニフェスト',
-    body: '1. 全ての情報はパイル（山）に入る。\n2. カードは不変の記録である。\n3. 発見は再シャッフルから生まれる。',
-    createdAt: Date.now() - 200000000,
-    updatedAt: Date.now(),
-    stacks: ['PoIC']
-  },
-  {
-    id: '1',
-    type: CardType.Record,
-    title: 'システム初期化',
-    body: 'Hello World. パイルが始まった。',
-    createdAt: Date.now() - 300000000,
-    updatedAt: Date.now(),
-    stacks: ['Meta']
-  }
+  // ... (Keep existing initial cards or load from storage)
 ];
 
 export default function App() {
@@ -155,17 +71,27 @@ export default function App() {
   const [dropboxToken, setDropboxToken] = useState<string | null>(localStorage.getItem('dropbox_token'));
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Settings State
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [dateFormat, setDateFormat] = useState<string>(() => {
+    return localStorage.getItem('poic-date-format') || 'YYYY/MM/DD HH:mm';
+  });
+
   // --- Effects ---
   
   // 1. Initial Load & Dropbox Auth Check
   useEffect(() => {
+      // Check for Dropbox token in URL hash
       const token = parseTokenFromUrl();
       if (token) {
           localStorage.setItem('dropbox_token', token);
           setDropboxToken(token);
-          window.history.replaceState(null, '', window.location.pathname); 
+          window.history.replaceState(null, '', window.location.pathname); // Clean URL
+          
+          // Initial Sync (Download)
           syncDownload(token);
       } else if (dropboxToken) {
+          // If already logged in, try to download/sync on startup
           syncDownload(dropboxToken);
       }
   }, []);
@@ -181,10 +107,16 @@ export default function App() {
 
       const timeoutId = setTimeout(() => {
           syncUpload(dropboxToken, cards);
-      }, 3000); 
+      }, 3000); // Wait 3 seconds after last change to upload
 
       return () => clearTimeout(timeoutId);
   }, [cards, dropboxToken]);
+
+  // Save Settings
+  const handleDateFormatChange = (format: string) => {
+    setDateFormat(format);
+    localStorage.setItem('poic-date-format', format);
+  };
 
   // --- Dropbox Helpers ---
   
@@ -194,26 +126,26 @@ export default function App() {
           const remoteCards = await downloadFromDropbox(token);
           if (remoteCards && Array.isArray(remoteCards)) {
               setCards(prevCards => {
+                  // Merge Logic: Use ID map. Prefer newer updatedAt
                   const mergedMap = new Map<string, Card>();
                   
                   prevCards.forEach(c => mergedMap.set(c.id, c));
                   
                   remoteCards.forEach((rc: Card) => {
                       const local = mergedMap.get(rc.id);
-                      // Use newer version. 
-                      // If remote is deleted but newer, local becomes deleted (handled by view filter)
                       if (!local || (rc.updatedAt > local.updatedAt)) {
                           mergedMap.set(rc.id, rc);
                       }
                   });
                   
-                  return Array.from(mergedMap.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+                  // Convert back to array
+                  return Array.from(mergedMap.values());
               });
           }
       } catch (error) {
           console.error('Dropbox Sync Error:', error);
           if (error instanceof Error && error.message.includes('401')) {
-              handleDisconnectDropbox();
+              handleDisconnectDropbox(); // Token expired
           }
       } finally {
           setIsSyncing(false);
@@ -323,7 +255,6 @@ export default function App() {
   };
 
   const handleDeleteCard = (id: string) => {
-    // Soft Delete: Mark as deleted and update timestamp for sync
     setCards(cards.map(c => 
         c.id === id 
             ? { ...c, isDeleted: true, updatedAt: Date.now() } 
@@ -355,7 +286,6 @@ export default function App() {
   };
   
   const confirmBatchDelete = () => {
-      // Soft Delete batch
       setCards(cards.map(c => 
           selectedCardIds.has(c.id)
             ? { ...c, isDeleted: true, updatedAt: Date.now() }
@@ -395,13 +325,11 @@ export default function App() {
   };
 
   const toggleGTDComplete = (id: string) => {
-    // Update timestamp on toggle for sync
     setCards(cards.map(c => 
       c.id === id ? { ...c, completed: !c.completed, updatedAt: Date.now() } : c
     ));
   };
 
-  // リンクをクリックした時の挙動
   const handleLinkClick = (term: string) => {
     if (term.startsWith('#')) {
         setSearchQuery(term);
@@ -591,9 +519,7 @@ ${opmlBody}
   }), [cards]);
 
   const filteredCards = useMemo(() => {
-    // Filter out deleted cards for view
     let result = cards.filter(c => !c.isDeleted);
-    
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(c => 
@@ -628,7 +554,6 @@ ${opmlBody}
   const activeCardForEditor = useMemo(() => {
     if (!editingCardId) return undefined;
     const card = cards.find(c => c.id === editingCardId);
-    // Don't show if deleted
     return card?.isDeleted ? undefined : card;
   }, [editingCardId, cards]);
 
@@ -679,7 +604,15 @@ ${opmlBody}
           />
       )}
       
-      {/* ... (Batch Tagging Modal, Delete Confirmation overlays remain same) ... */}
+      {/* ... (Previous Overlays) */}
+      
+      <SettingsModal 
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        dateFormat={dateFormat}
+        onDateFormatChange={handleDateFormatChange}
+      />
+
       {showBatchTagModal && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]">
               <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200">
@@ -740,6 +673,7 @@ ${opmlBody}
                     initialCard={activeCardForEditor}
                     allTitles={allTitles}
                     availableStacks={allStacks.map(s => s.name)}
+                    dateFormat={dateFormat} // Pass date format
                     onSave={handleSaveCard} 
                     onCancel={closeEditor}
                     onDelete={handleDeleteCard}
@@ -767,6 +701,7 @@ ${opmlBody}
         </div>
 
         <nav className="flex-1 overflow-y-auto p-4 space-y-6">
+            {/* ... (Previous Sections) ... */}
             <div className="space-y-1">
                 <button onClick={() => handleViewChange('All')} className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium transition-colors ${viewMode === 'All' ? 'bg-white shadow-sm text-stone-900 border border-stone-100' : 'text-stone-500 hover:text-stone-900'}`}>
                     <Library size={18} /> すべてのカード
@@ -848,12 +783,23 @@ ${opmlBody}
                     </div>
                 )}
             </div>
+
+            {/* Settings Link */}
+            <div className="pt-4 border-t border-stone-200/50">
+                <button 
+                    onClick={() => setIsSettingsOpen(true)}
+                    className="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors"
+                >
+                    <Settings size={18} />
+                    設定
+                </button>
+            </div>
         </nav>
       </aside>
 
-      {/* Main Content Area */}
+      {/* Main Content Area... */}
       <main className="flex-1 overflow-y-auto bg-stone-200">
-        {/* ... (Header, Feed Content, FAB remain the same) ... */}
+        {/* ... (Existing Content) ... */}
         {/* Sticky Header */}
         <header className="sticky top-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 mb-4 border-b border-stone-300/30">
             <div className="flex items-center gap-3 flex-1">

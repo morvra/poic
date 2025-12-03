@@ -32,3 +32,30 @@ export const getRelativeDateLabel = (timestamp: number): string => {
   if (cardDate.getTime() < today.getTime()) return 'Overdue';
   return 'Upcoming';
 };
+
+// New function for customizable timestamp formatting
+export const formatTimestampByPattern = (date: Date, pattern: string): string => {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const yyyy = date.getFullYear();
+  const mm = pad(date.getMonth() + 1);
+  const dd = pad(date.getDate());
+  const hh = pad(date.getHours());
+  const min = pad(date.getMinutes());
+
+  switch (pattern) {
+    case 'YYYY/MM/DD HH:mm':
+      return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
+    case 'YYYY-MM-DD HH:mm':
+      return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+    case 'MM/DD/YYYY HH:mm':
+      return `${mm}/${dd}/${yyyy} ${hh}:${min}`;
+    case 'DD/MM/YYYY HH:mm':
+      return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+    case 'YYYY/MM/DD':
+      return `${yyyy}/${mm}/${dd}`;
+    case 'HH:mm':
+      return `${hh}:${min}`;
+    default:
+      return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
+  }
+};

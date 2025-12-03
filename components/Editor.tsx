@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardType } from '../types';
-import { formatTimeShort } from '../utils';
+import { formatTimeShort, formatTimestampByPattern } from '../utils'; // Import updated util
 import { CardRenderer } from './CardRenderer';
 import { Calendar, Save, X, Trash2, Clock, CheckCircle, Circle, Link as LinkIcon, AlertTriangle, FileText, Lightbulb, CheckSquare, BookOpen } from 'lucide-react';
 
@@ -8,6 +8,7 @@ interface EditorProps {
   initialCard?: Card;
   allTitles: string[];
   availableStacks: string[];
+  dateFormat: string; // New prop
   onSave: (card: Partial<Card>, shouldClose?: boolean) => void;
   onCancel: () => void;
   onDelete?: (id: string) => void;
@@ -25,7 +26,17 @@ const TypeIcon = ({ type, className }: { type: CardType, className?: string }) =
     }
 };
 
-export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availableStacks, onSave, onCancel, onDelete, onNavigate, backlinks = [] }) => {
+export const Editor: React.FC<EditorProps> = ({ 
+  initialCard, 
+  allTitles, 
+  availableStacks, 
+  dateFormat, // Destructure new prop
+  onSave, 
+  onCancel, 
+  onDelete, 
+  onNavigate, 
+  backlinks = [] 
+}) => {
   const [type, setType] = useState<CardType>(initialCard?.type || CardType.Record);
   const [title, setTitle] = useState(initialCard?.title || '');
   const [body, setBody] = useState(initialCard?.body || '');
@@ -208,12 +219,12 @@ export const Editor: React.FC<EditorProps> = ({ initialCard, allTitles, availabl
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [body, onCancel, showWikiSuggestions, showStackSuggestions, wikiSuggestions, wikiSuggestionIndex, stackSuggestions, stackSuggestionIndex, isEditingBody, showDeleteConfirm]);
 
+  // Insert Timestamp using the configured format
   const insertTimestamp = () => {
     if (!bodyRef.current) return;
     const now = new Date();
-    const timestampStr = ` ${now.toLocaleString('ja-JP', { 
-        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
-    })} `;
+    // Use the utility function with the current dateFormat prop
+    const timestampStr = ` ${formatTimestampByPattern(now, dateFormat)} `;
     const start = bodyRef.current.selectionStart;
     const end = bodyRef.current.selectionEnd;
     const newBody = body.substring(0, start) + timestampStr + body.substring(end);
