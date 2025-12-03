@@ -15,6 +15,7 @@ export interface Card {
   dueDate?: number; // Only for GTD
   completed?: boolean; // Only for GTD
   stacks: string[]; // "Task Forces" or Themes
+  isDeleted?: boolean; // Logical deletion flag for sync
 }
 
 export type ViewMode = 'All' | 'GTD' | 'Stack' | 'Type';
