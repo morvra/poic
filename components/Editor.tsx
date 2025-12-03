@@ -52,7 +52,9 @@ export const Editor: React.FC<EditorProps> = ({
   const [completed, setCompleted] = useState(initialCard?.completed || false);
   
   // Edit Mode State for Body
-  const [isEditingBody, setIsEditingBody] = useState(!initialCard); 
+  // Logic: if initialCard exists AND has an ID, default to View Mode. 
+  // If it's undefined OR has no ID (phantom), default to Edit Mode.
+  const [isEditingBody, setIsEditingBody] = useState(!initialCard || !initialCard.id); 
   const [initialCursorOffset, setInitialCursorOffset] = useState<number | null>(null);
   
   // Delete Confirmation State
@@ -86,9 +88,11 @@ export const Editor: React.FC<EditorProps> = ({
     }
   }, [initialCard?.id]);
 
-  // Focus Title on New Card
+  // Focus Title on New Card (ONLY if no title provided e.g. phantom)
   useEffect(() => {
-      if (!initialCard && titleInputRef.current) {
+      // If it's a new card (no id) AND has no title yet, focus title.
+      // If creating from link (phantom), title is set, so skip this.
+      if ((!initialCard || (!initialCard.id && !initialCard.title)) && titleInputRef.current) {
           setTimeout(() => {
               titleInputRef.current?.focus();
           }, 50);
@@ -110,14 +114,18 @@ export const Editor: React.FC<EditorProps> = ({
           setCompleted(initialCard.completed || false);
           setShowDeleteConfirm(false);
           
-          // Only switch to view mode if we genuinely switched cards
-          if (prevId !== undefined && prevId !== currentId) {
+          // Only switch to view mode if we genuinely switched cards (ID changed from one valid ID to another).
+          // If we transitioned from undefined (new card) to a valid ID (saved card), keep editing mode.
+          // ALSO, if card has no ID (phantom), force Edit Mode.
+          if (!initialCard.id) {
+              setIsEditingBody(true);
+          } else if (prevId !== undefined && prevId !== currentId) {
               setIsEditingBody(false);
           }
       }
       
       prevCardIdRef.current = currentId;
-  }, [initialCard?.id]);
+  }, [initialCard?.id, initialCard]); // Dependency on initialCard object needed for title check on phantom reuse?
 
   // Auto-save logic
   useEffect(() => {
@@ -158,7 +166,17 @@ export const Editor: React.FC<EditorProps> = ({
   // Focus textarea when switching to edit mode
   useEffect(() => {
       if (isEditingBody && bodyRef.current) {
-          if (initialCard || document.activeElement === readViewRef.current) {
+          // Logic: Focus body if:
+          // 1. It's a phantom card (new card with title from link)
+          // 2. We are switching to edit mode on an existing card (explicit user action)
+          // 3. User tabbed into it (document.activeElement check)
+          // We DO NOT want to focus body if it's a standard new card (no title), because title should be focused.
+          
+          const isPhantom = !initialCard?.id && !!initialCard?.title;
+          const isExplicitEdit = !!initialCard?.id; // Existing card going to edit mode
+          const isTabFocus = document.activeElement === readViewRef.current;
+
+          if (isPhantom || isExplicitEdit || isTabFocus) {
               bodyRef.current.focus();
           }
           
