@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardType, ViewMode, PoicStats } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern } from './utils';
-import { getAuthUrl, parseTokenFromUrl, uploadToDropbox, downloadFromDropbox } from './utils/dropbox'; // New Import
+import { getAuthUrl, parseTokenFromUrl, uploadToDropbox, downloadFromDropbox } from './utils/dropbox'; 
 import { CardItem } from './components/CardItem';
 import { Editor } from './components/Editor';
 import { SettingsModal } from './components/SettingsModal'; 
@@ -73,6 +73,7 @@ export default function App() {
   // Modal State
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [phantomCard, setPhantomCard] = useState<Partial<Card> | null>(null); // For creating new cards from links
 
   // Dropbox State
   const [dropboxToken, setDropboxToken] = useState<string | null>(localStorage.getItem('dropbox_token'));
@@ -263,6 +264,8 @@ export default function App() {
       
       if (!shouldClose) {
           setEditingCardId(newId);
+          // If we were creating a phantom card, clear it now that real card exists
+          setPhantomCard(null);
       }
     }
     
@@ -359,24 +362,49 @@ export default function App() {
     if (targetCard) {
         openEditCardEditor(targetCard);
     } else {
-        setSearchQuery(term);
-        setViewMode('All');
-        setActiveStack(null);
-        setIsSidebarOpen(false);
+        // Create phantom card if not found
+        setSearchQuery('');
+        setPhantomCard({
+            title: term,
+            type: CardType.Record,
+            body: '',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            stacks: [],
+            isDeleted: false
+        });
+        setEditingCardId(null);
+        setIsEditorOpen(true);
     }
   };
 
   const handleEditorNavigation = (term: string) => {
+      // Close editor first if needed, or handle switching logic
+      // Simplest is to close current and handle link as if from main view
       if (term.startsWith('#')) {
           closeEditor();
           handleLinkClick(term);
       } else {
+          // Check if link exists
           const targetCard = cards.find(c => !c.isDeleted && c.title.toLowerCase() === term.toLowerCase());
           if (targetCard) {
+              // Switch to existing card
               setEditingCardId(targetCard.id); 
+              setPhantomCard(null);
           } else {
-              closeEditor();
-              handleLinkClick(term);
+              // Create phantom from inside editor
+              // We need to trigger the same logic as handleLinkClick's else block, but keeping editor open?
+              // Or just switching editor content.
+              setPhantomCard({
+                  title: term,
+                  type: CardType.Record,
+                  body: '',
+                  createdAt: Date.now(),
+                  updatedAt: Date.now(),
+                  stacks: [],
+                  isDeleted: false
+              });
+              setEditingCardId(null);
           }
       }
   };
@@ -400,6 +428,7 @@ export default function App() {
 
   const openNewCardEditor = () => {
     setEditingCardId(null);
+    setPhantomCard(null);
     setIsEditorOpen(true);
   };
 
@@ -409,12 +438,14 @@ export default function App() {
         return;
     }
     setEditingCardId(card.id);
+    setPhantomCard(null);
     setIsEditorOpen(true);
   };
 
   const closeEditor = () => {
     setIsEditorOpen(false);
     setEditingCardId(null);
+    setPhantomCard(null);
   };
 
   const handleRandomCard = () => {
@@ -569,10 +600,11 @@ ${opmlBody}
   }, [cards, viewMode, activeStack, activeType, searchQuery]);
 
   const activeCardForEditor = useMemo(() => {
+    if (phantomCard) return phantomCard as Card; // Prioritize phantom (link creation)
     if (!editingCardId) return undefined;
     const card = cards.find(c => c.id === editingCardId);
     return card?.isDeleted ? undefined : card;
-  }, [editingCardId, cards]);
+  }, [editingCardId, cards, phantomCard]);
 
   const activeCardBacklinks = useMemo(() => {
       if (!activeCardForEditor) return [];
@@ -618,6 +650,7 @@ ${opmlBody}
   return (
     <div className="h-screen flex font-sans text-ink bg-stone-200 overflow-hidden">
       
+      {/* ... (Overlay and Modal code remains same) ... */}
       {/* Mobile Overlay */}
       {isSidebarOpen && (
           <div 
@@ -633,7 +666,6 @@ ${opmlBody}
         onDateFormatChange={handleDateFormatChange}
       />
 
-      {/* ... (Modal overlays) ... */}
       {showBatchTagModal && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]">
               <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200">
@@ -705,9 +737,9 @@ ${opmlBody}
         </div>
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar ... (Unchanged) */}
       <aside className={`
-          fixed top-0 bottom-0 left-0 bg-paper-dark border-r border-stone-300 flex flex-col z-50
+          fixed top-0 bottom-0 left-0 w-64 bg-paper-dark border-r border-stone-300 flex flex-col z-50
           transition-all duration-300 ease-in-out shadow-2xl md:shadow-none
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           md:relative md:translate-x-0
@@ -822,17 +854,15 @@ ${opmlBody}
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto bg-stone-200">
-        {/* Sticky Header */}
+        {/* Sticky Header... (Unchanged) */}
         <header className="sticky top-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 mb-4 border-b border-stone-300/30">
             <div className="flex items-center gap-3 flex-1">
-                {/* Unified Toggle Button */}
                 <button 
                     onClick={toggleSidebar} 
                     className="text-stone-600 hover:bg-stone-300 p-2 rounded-md transition-colors"
                 >
                     <Menu size={20} />
                 </button>
-                
                 <button onClick={handleHome} title="すべて表示" className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors">
                     <Home size={20} />
                 </button>
