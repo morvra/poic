@@ -1,4 +1,3 @@
-
 export enum CardType {
   Record = 'Record',     // Blue: Daily logs, facts
   Discovery = 'Discovery', // Red: Ideas, insights
@@ -24,6 +23,7 @@ export interface PoicStats {
   total: number;
   record: number;
   discovery: number;
-  gtd: number;
+  gtdActive: number; // 未完了のみ (メニュー用)
+  gtdTotal: number;  // 完了含むすべて (4タグカウント用)
   reference: number;
 }
