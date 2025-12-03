@@ -33,7 +33,9 @@ export const getRelativeDateLabel = (timestamp: number): string => {
   return 'Upcoming';
 };
 
-// New function for customizable timestamp formatting
+const DAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Customizable timestamp formatting with Day of Week
 export const formatTimestampByPattern = (date: Date, pattern: string): string => {
   const pad = (n: number) => n.toString().padStart(2, '0');
   const yyyy = date.getFullYear();
@@ -41,21 +43,33 @@ export const formatTimestampByPattern = (date: Date, pattern: string): string =>
   const dd = pad(date.getDate());
   const hh = pad(date.getHours());
   const min = pad(date.getMinutes());
+  const day = DAYS_EN[date.getDay()];
 
   switch (pattern) {
     case 'YYYY/MM/DD HH:mm':
-      return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
+      return `${yyyy}/${mm}/${dd} ${day} ${hh}:${min}`;
     case 'YYYY-MM-DD HH:mm':
-      return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+      return `${yyyy}-${mm}-${dd} ${day} ${hh}:${min}`;
     case 'MM/DD/YYYY HH:mm':
-      return `${mm}/${dd}/${yyyy} ${hh}:${min}`;
+      return `${mm}/${dd}/${yyyy} ${day} ${hh}:${min}`;
     case 'DD/MM/YYYY HH:mm':
-      return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+      return `${dd}/${mm}/${yyyy} ${day} ${hh}:${min}`;
     case 'YYYY/MM/DD':
-      return `${yyyy}/${mm}/${dd}`;
+      return `${yyyy}/${mm}/${dd} ${day}`;
     case 'HH:mm':
-      return `${hh}:${min}`;
+      return `${hh}:${min}`; // Time only
     default:
-      return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
+      return `${yyyy}/${mm}/${dd} ${day} ${hh}:${min}`;
   }
+};
+
+// Helper for GTD Due Date (YYYY/MM/DD Sun)
+export const formatDateWithDay = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const yyyy = date.getFullYear();
+    const mm = pad(date.getMonth() + 1);
+    const dd = pad(date.getDate());
+    const day = DAYS_EN[date.getDay()];
+    return `${yyyy}/${mm}/${dd} ${day}`;
 };
