@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardType, ViewMode, PoicStats } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern } from './utils';
-// Updated Imports from dropbox utils for PKCE
-import { initiateAuth, handleAuthCallback, uploadToDropbox, downloadFromDropbox, isAuthenticated, logout } from './utils/dropbox'; 
+import { getAuthUrl, parseTokenFromUrl, uploadToDropbox, downloadFromDropbox, isAuthenticated, logout } from './utils/dropbox'; 
 import { CardItem } from './components/CardItem';
 import { Editor } from './components/Editor';
 import { SettingsModal } from './components/SettingsModal'; 
@@ -76,7 +75,7 @@ export default function App() {
   const [phantomCards, setPhantomCards] = useState<Map<string, Partial<Card>>>(new Map());
 
   // Dropbox State
-  // We use localStorage for persistence, but track connection state in React state for UI updates
+  const [dropboxToken, setDropboxToken] = useState<string | null>(localStorage.getItem('dropbox_access_token'));
   const [isDropboxConnected, setIsDropboxConnected] = useState(isAuthenticated());
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -223,20 +222,18 @@ export default function App() {
   }, [unpinnedCards, viewMode]);
 
   // --- Effects ---
-  
-  // 1. Initial Load & Auth Check (PKCE Flow)
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
       const code = params.get('code');
       
       if (code) {
-          // Handle Auth Callback for PKCE
           setIsSyncing(true);
           handleAuthCallback(code)
-            .then(() => {
+            .then((token) => {
                 setIsDropboxConnected(true);
-                window.history.replaceState(null, '', window.location.pathname); // Clean URL
-                return syncDownload();
+                setDropboxToken(token); 
+                window.history.replaceState(null, '', window.location.pathname); 
+                return syncDownload(token);
             })
             .catch(err => {
                 console.error('Auth failed', err);
@@ -244,26 +241,21 @@ export default function App() {
             })
             .finally(() => setIsSyncing(false));
       } else if (isAuthenticated()) {
-          // Already logged in, perform initial sync
           syncDownload();
       }
   }, []);
 
-  // 2. Save Cards to LocalStorage
   useEffect(() => {
     localStorage.setItem('poic-cards', JSON.stringify(cards));
   }, [cards]);
 
-  // 3. Auto-Sync to Dropbox
   useEffect(() => {
-      if (!isDropboxConnected) return;
-
+      if (!dropboxToken) return;
       const timeoutId = setTimeout(() => {
-          syncUpload(cards);
+          syncUpload(dropboxToken, cards);
       }, 3000); 
-
       return () => clearTimeout(timeoutId);
-  }, [cards, isDropboxConnected]);
+  }, [cards, dropboxToken]);
 
   const handleDateFormatChange = (format: string) => {
     setDateFormat(format);
@@ -281,8 +273,7 @@ export default function App() {
   };
 
   // --- Dropbox Helpers Wrappers ---
-  const syncDownload = async () => {
-      if (!isDropboxConnected) return;
+  const syncDownload = async (token?: string) => {
       setIsSyncing(true);
       try {
           const remoteCards = await downloadFromDropbox();
@@ -301,8 +292,7 @@ export default function App() {
           }
       } catch (error) {
           console.error('Dropbox Sync Error:', error);
-          // If refresh token is invalid, we might need to logout
-          if (error instanceof Error && (error.message.includes('Token refresh failed') || error.message.includes('Unauthorized'))) {
+          if (error instanceof Error && (error.message.includes('Unauthorized') || error.message.includes('401'))) {
               handleDisconnectDropbox();
           }
       } finally {
@@ -310,7 +300,7 @@ export default function App() {
       }
   };
 
-  const syncUpload = async (data: Card[]) => {
+  const syncUpload = async (token: string, data: Card[]) => {
       if (!isDropboxConnected) return;
       setIsSyncing(true);
       try {
@@ -336,6 +326,7 @@ export default function App() {
   const handleDisconnectDropbox = () => {
       logout();
       setIsDropboxConnected(false);
+      setDropboxToken(null);
   };
 
   // Global Keyboard Shortcuts
@@ -352,6 +343,76 @@ export default function App() {
   }, [editingCardIds.length]);
 
   // --- Actions ---
+  
+  // Stack Management
+  const handleSelectCard = (id: string) => {
+      const newSelection = new Set(selectedCardIds);
+      if (newSelection.has(id)) {
+          newSelection.delete(id);
+      } else {
+          newSelection.add(id);
+      }
+      setSelectedCardIds(newSelection);
+  };
+
+  const openEditCardEditor = (card: Card, e?: React.MouseEvent) => {
+    if (isSelectionMode) {
+        handleSelectCard(card.id);
+        return;
+    }
+    
+    const isMultiOpen = e?.metaKey || e?.ctrlKey;
+
+    setEditingCardIds(prev => {
+        if (isMultiOpen) {
+            if (prev.includes(card.id)) return prev;
+            if (prev.length < 2) { setActivePanelIndex(1); return [...prev, card.id]; } 
+            else { setActivePanelIndex(1); return [prev[0], card.id]; }
+        } else {
+            if (prev.length === 0) { setActivePanelIndex(0); return [card.id]; }
+            const newIds = [...prev]; newIds[activePanelIndex] = card.id; return newIds;
+        }
+    });
+  };
+
+  const openNewCardEditor = () => {
+      const tempId = `new-${Date.now()}`;
+      const newPhantom: Partial<Card> = { id: tempId, type: CardType.Record, title: '', body: '', createdAt: Date.now(), updatedAt: Date.now(), stacks: [], isDeleted: false, isPinned: false };
+      setPhantomCards(prev => new Map(prev).set(tempId, newPhantom));
+      setEditingCardIds(prev => {
+          if (prev.length === 0) { setActivePanelIndex(0); return [tempId]; }
+          const newIds = [...prev]; newIds[activePanelIndex] = tempId; return newIds;
+      });
+  };
+
+  const handleCloseEditor = (id: string) => {
+      setEditingCardIds(prev => {
+          const newIds = prev.filter(cid => cid !== id);
+          if (newIds.length === 0) setActivePanelIndex(0);
+          else if (activePanelIndex >= newIds.length) setActivePanelIndex(0);
+          return newIds;
+      });
+      if (phantomCards.has(id)) {
+          const newPhantoms = new Map(phantomCards);
+          newPhantoms.delete(id);
+          setPhantomCards(newPhantoms);
+      }
+  };
+
+  const handleCloseAll = () => {
+      setEditingCardIds([]);
+      setPhantomCards(new Map());
+  };
+  
+  const handleMoveToSide = (id: string) => {
+      setEditingCardIds(prev => {
+          if (prev.length === 1 && prev[0] === id) {
+             return prev;
+          }
+          return prev;
+      });
+  };
+
   const handleSaveCard = (cardData: Partial<Card>, shouldClose = true) => {
     const currentId = cardData.id; 
     let finalId = currentId;
@@ -360,7 +421,6 @@ export default function App() {
         const existingIndex = cards.findIndex(c => c.id === currentId);
         
         if (existingIndex === -1) {
-             // Create New
              const newId = generateId();
              finalId = newId;
              const newCard: Card = {
@@ -382,7 +442,6 @@ export default function App() {
                  const newPhantoms = new Map(phantomCards);
                  newPhantoms.delete(currentId);
                  setPhantomCards(newPhantoms);
-                 
                  setEditingCardIds(prev => prev.map(id => id === currentId ? newId : id));
              }
         } else {
@@ -411,16 +470,6 @@ export default function App() {
       setSelectedCardIds(new Set()); 
       setShowBatchDeleteConfirm(false);
       setShowBatchTagModal(false);
-  };
-
-  const handleSelectCard = (id: string) => {
-      const newSelection = new Set(selectedCardIds);
-      if (newSelection.has(id)) {
-          newSelection.delete(id);
-      } else {
-          newSelection.add(id);
-      }
-      setSelectedCardIds(newSelection);
   };
 
   const handleClickDeleteSelected = () => {
@@ -482,7 +531,7 @@ export default function App() {
       }));
   };
 
-  const handleLinkClick = (term: string) => {
+  const handleLinkClick = (term: string, e?: React.MouseEvent) => {
     if (term.startsWith('#')) {
         setSearchQuery(term);
         setViewMode('All');
@@ -492,25 +541,23 @@ export default function App() {
     }
     const targetCard = cards.find(c => !c.isDeleted && c.title.toLowerCase() === term.toLowerCase());
     if (targetCard) {
-        openEditCardEditor(targetCard);
+        openEditCardEditor(targetCard, e);
     } else {
         setSearchQuery('');
-        setPhantomCard({
-            title: term,
-            type: CardType.Record,
-            body: '',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            stacks: [],
-            isDeleted: false,
-            isPinned: false
-        });
-        // New link logic uses stack
         const tempId = `phantom-${Date.now()}`;
         setPhantomCards(prev => new Map(prev).set(tempId, {
             id: tempId, title: term, type: CardType.Record, body: '', createdAt: Date.now(), updatedAt: Date.now(), stacks: [], isDeleted: false, isPinned: false
         }));
-        setEditingCardIds([tempId]); // Open in primary panel by default for simplicity, or use same logic as new
+        setEditingCardIds(prev => {
+             const isMultiOpen = e?.metaKey || e?.ctrlKey;
+             if (isMultiOpen) {
+                if (prev.length < 2) { setActivePanelIndex(1); return [...prev, tempId]; } 
+                else { setActivePanelIndex(1); return [prev[0], tempId]; }
+             } else {
+                if (prev.length === 0) { setActivePanelIndex(0); return [tempId]; }
+                const newIds = [...prev]; newIds[activePanelIndex] = tempId; return newIds;
+             }
+        });
     }
   };
 
@@ -520,90 +567,7 @@ export default function App() {
             setSearchQuery(term);
             return;
        }
-       
-       const isMultiOpen = e?.metaKey || e?.ctrlKey;
-       const targetCard = cards.find(c => !c.isDeleted && c.title.toLowerCase() === term.toLowerCase());
-       
-       if (targetCard) {
-           openEditCardEditor(targetCard, e);
-       } else {
-            const tempId = `phantom-${Date.now()}`;
-            const newPhantom = { id: tempId, title: term, type: CardType.Record, body: '', createdAt: Date.now(), updatedAt: Date.now(), stacks: [], isDeleted: false, isPinned: false };
-            setPhantomCards(prev => new Map(prev).set(tempId, newPhantom));
-            
-            setEditingCardIds(prev => {
-                if (isMultiOpen) {
-                    if (prev.length < 2) { setActivePanelIndex(1); return [...prev, tempId]; } 
-                    else { setActivePanelIndex(1); return [prev[0], tempId]; }
-                } else {
-                    if (prev.length === 0) { setActivePanelIndex(0); return [tempId]; }
-                    const newIds = [...prev]; newIds[activePanelIndex] = tempId; return newIds;
-                }
-            });
-       }
-  };
-
-  // Stack Management
-  const openEditCardEditor = (card: Card, e?: React.MouseEvent) => {
-    if (isSelectionMode) {
-        handleSelectCard(card.id);
-        return;
-    }
-    
-    const isMultiOpen = e?.metaKey || e?.ctrlKey;
-
-    setEditingCardIds(prev => {
-        if (isMultiOpen) {
-            if (prev.includes(card.id)) return prev;
-            if (prev.length < 2) { setActivePanelIndex(1); return [...prev, card.id]; } 
-            else { setActivePanelIndex(1); return [prev[0], card.id]; }
-        } else {
-            if (prev.length === 0) { setActivePanelIndex(0); return [card.id]; }
-            const newIds = [...prev]; newIds[activePanelIndex] = card.id; return newIds;
-        }
-    });
-  };
-
-  const openNewCardEditor = () => {
-      const tempId = `new-${Date.now()}`;
-      const newPhantom: Partial<Card> = { id: tempId, type: CardType.Record, title: '', body: '', createdAt: Date.now(), updatedAt: Date.now(), stacks: [], isDeleted: false, isPinned: false };
-      setPhantomCards(prev => new Map(prev).set(tempId, newPhantom));
-      setEditingCardIds(prev => {
-          if (prev.length === 0) { setActivePanelIndex(0); return [tempId]; }
-          const newIds = [...prev]; newIds[activePanelIndex] = tempId; return newIds;
-      });
-  };
-
-  const handleCloseEditor = (id: string) => {
-      setEditingCardIds(prev => {
-          const newIds = prev.filter(cid => cid !== id);
-          if (newIds.length === 0) setActivePanelIndex(0);
-          else if (activePanelIndex >= newIds.length) setActivePanelIndex(0);
-          return newIds;
-      });
-      if (phantomCards.has(id)) {
-          const newPhantoms = new Map(phantomCards);
-          newPhantoms.delete(id);
-          setPhantomCards(newPhantoms);
-      }
-  };
-
-  const handleCloseAll = () => {
-      setEditingCardIds([]);
-      setPhantomCards(new Map());
-  };
-  
-  const handleMoveToSide = (id: string) => {
-      setEditingCardIds(prev => {
-          if (prev.length === 1 && prev[0] === id) {
-             // Simple toggle: if 1 card, allow opening another on the left later?
-             // For now, simulate moving to right by making it index 1 and inserting null at index 0?
-             // But our logic expects valid IDs. 
-             // Let's just do nothing if 1 card for now as requested behavior was complex without non-modal layout.
-             return prev;
-          }
-          return prev;
-      });
+       handleLinkClick(term, e);
   };
 
   const handleRandomCard = () => {
@@ -630,7 +594,6 @@ export default function App() {
     setActiveType(null);
   };
 
-  // ... (handleExportOPML same)
   const handleExportOPML = () => {
     let exportCards = filteredCards;
     if (isSelectionMode && selectedCardIds.size > 0) {
@@ -709,6 +672,7 @@ ${opmlBody}
       }
   };
 
+  // Determine grid columns based on desktop sidebar state
   const gridClasses = isDesktopSidebarOpen 
     ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
     : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4";
@@ -716,6 +680,7 @@ ${opmlBody}
   return (
     <div className="h-screen flex font-sans text-ink bg-stone-200 overflow-hidden">
       
+      {/* Mobile Overlay */}
       {isSidebarOpen && (
           <div 
             className="fixed inset-0 bg-black/20 z-40 md:hidden backdrop-blur-sm"
@@ -804,7 +769,6 @@ ${opmlBody}
                             className={`w-full h-full max-h-[85vh] pointer-events-auto transition-all duration-300 shadow-2xl ${editingCardIds.length === 1 ? 'max-w-3xl mx-auto' : ''}`}
                             onClick={() => setActivePanelIndex(index as 0 | 1)} 
                         >
-                            {/* Visual indicator for active panel */}
                             <div className={`h-full rounded-lg transition-all duration-200 ${isActive ? '' : 'opacity-80 grayscale-[0.3] hover:opacity-100 hover:grayscale-0'}`}>
                                 <Editor 
                                     initialCard={displayCard as Card}
@@ -826,54 +790,246 @@ ${opmlBody}
         </div>
       )}
 
-      {/* Sidebar... (Unchanged) */}
-      <aside className={`fixed top-0 bottom-0 left-0 w-64 bg-paper-dark border-r border-stone-300 flex flex-col z-50 transition-all duration-300 ease-in-out shadow-2xl md:shadow-none ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 ${isDesktopSidebarOpen ? 'md:w-64' : 'md:w-0 md:border-r-0 md:overflow-hidden'}`}>
+      {/* Sidebar */}
+      <aside className={`
+          fixed top-0 bottom-0 left-0 w-64 bg-paper-dark border-r border-stone-300 flex flex-col z-50
+          transition-all duration-300 ease-in-out shadow-2xl md:shadow-none
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          md:relative md:translate-x-0
+          ${isDesktopSidebarOpen ? 'md:w-64' : 'md:w-0 md:border-r-0 md:overflow-hidden'}
+      `}>
         <div className="w-64 flex flex-col h-full">
             <div className="p-6 border-b border-stone-200/50 flex justify-between items-center">
-                <div><h1 className="font-serif font-bold text-2xl tracking-tighter text-stone-800">PoIC Digital</h1><p className="text-xs text-stone-400 mt-1 uppercase tracking-widest">Pile of Index Cards</p></div><button className="md:hidden text-stone-500" onClick={() => setIsSidebarOpen(false)}><X size={20} /></button>
+                <div>
+                    <h1 className="font-serif font-bold text-2xl tracking-tighter text-stone-800">PoIC Digital</h1>
+                    <p className="text-xs text-stone-400 mt-1 uppercase tracking-widest">Pile of Index Cards</p>
+                </div>
+                <button className="md:hidden text-stone-500" onClick={() => setIsSidebarOpen(false)}>
+                    <X size={20} />
+                </button>
             </div>
+
             <nav className="flex-1 overflow-y-auto p-4 space-y-6">
-                <div className="space-y-1"><button onClick={() => handleViewChange('All')} className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium transition-colors ${viewMode === 'All' ? 'bg-white shadow-sm text-stone-900 border border-stone-100' : 'text-stone-500 hover:text-stone-900'}`}><Library size={18} /> すべてのカード<span className="ml-auto text-xs text-stone-400">{stats.total}</span></button><button onClick={() => handleViewChange('GTD')} className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium transition-colors ${viewMode === 'GTD' ? 'bg-white shadow-sm text-green-700 border border-green-100' : 'text-stone-500 hover:text-green-700'}`}><CheckSquare size={18} /> GTD タスク<span className="ml-auto text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{stats.gtdActive}</span></button></div>
-                <div className="pt-4 border-t border-stone-200/50"><div className="grid grid-cols-2 gap-2 px-2"><button onClick={() => handleViewChange('Type', CardType.Record)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Record ? 'bg-blue-100 border-blue-300 shadow-inner' : 'bg-blue-50 border-blue-100 hover:bg-blue-100'}`}><div className="text-xl font-bold text-blue-600">{stats.record}</div><div className="text-[10px] uppercase text-blue-400">RECORD</div></button><button onClick={() => handleViewChange('Type', CardType.Discovery)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Discovery ? 'bg-red-100 border-red-300 shadow-inner' : 'bg-red-50 border-red-100 hover:bg-red-100'}`}><div className="text-xl font-bold text-red-600">{stats.discovery}</div><div className="text-[10px] uppercase text-red-400">DISCOVERY</div></button><button onClick={() => handleViewChange('Type', CardType.GTD)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.GTD ? 'bg-green-100 border-green-300 shadow-inner' : 'bg-green-50 border-green-100 hover:bg-green-100'}`}><div className="text-xl font-bold text-green-600">{stats.gtdTotal}</div><div className="text-[10px] uppercase text-green-400">GTD</div></button><button onClick={() => handleViewChange('Type', CardType.Reference)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Reference ? 'bg-yellow-100 border-yellow-300 shadow-inner' : 'bg-yellow-50 border-yellow-100 hover:bg-yellow-100'}`}><div className="text-xl font-bold text-yellow-600">{stats.reference}</div><div className="text-[10px] uppercase text-yellow-400">REFERENCE</div></button></div></div>
-                <div className="pt-2 border-t border-stone-200/50"><h3 className="px-3 text-xs font-bold text-stone-400 uppercase tracking-wider mb-2 flex items-center gap-2 mt-4"><Tag size={12} /> タグ</h3><div className="space-y-1">{allStacks.map(stack => (<button key={stack.name} onClick={() => handleViewChange('Stack', stack.name)} className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors flex justify-between items-center ${activeStack === stack.name ? 'bg-stone-200 text-stone-900 font-medium' : 'text-stone-500 hover:text-stone-800'}`}><span className="truncate">{stack.name}</span><span className="text-xs bg-stone-200/50 px-1.5 py-0.5 rounded-full text-stone-400">{stack.count}</span></button>))}{allStacks.length === 0 && <p className="px-3 text-xs text-stone-300 italic">No tags yet</p>}</div></div>
-                <div className="pt-2 border-t border-stone-200/50"><h3 className="px-3 text-xs font-bold text-stone-400 uppercase tracking-wider mb-2 flex items-center gap-2 mt-4"><Cloud size={12} /> Sync</h3>{isDropboxConnected ? (<div className="px-3 space-y-2"><button onClick={handleDisconnectDropbox} className="w-full bg-blue-100 text-blue-700 text-xs py-2 rounded-md font-bold hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"><Cloud size={14} />{isSyncing ? '同期中...' : 'Dropbox 接続済み'}</button><button onClick={handleManualSync} disabled={isSyncing} className="w-full bg-stone-200 text-stone-600 text-xs py-2 rounded-md font-bold hover:bg-stone-300 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"><RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />今すぐ同期</button></div>) : (<div className="px-3"><button onClick={handleConnectDropbox} className="w-full bg-stone-200 text-stone-600 text-xs py-2 rounded-md font-bold hover:bg-stone-300 transition-colors flex items-center justify-center gap-2"><Cloud size={14} />Dropbox に接続</button></div>)}</div>
-                <div className="pt-4 border-t border-stone-200/50"><button onClick={() => setIsSettingsOpen(true)} className="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors"><Settings size={18} />設定</button></div>
+                <div className="space-y-1">
+                    <button onClick={() => handleViewChange('All')} className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium transition-colors ${viewMode === 'All' ? 'bg-white shadow-sm text-stone-900 border border-stone-100' : 'text-stone-500 hover:text-stone-900'}`}>
+                        <Library size={18} /> すべてのカード
+                        <span className="ml-auto text-xs text-stone-400">{stats.total}</span>
+                    </button>
+                    <button onClick={() => handleViewChange('GTD')} className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium transition-colors ${viewMode === 'GTD' ? 'bg-white shadow-sm text-green-700 border border-green-100' : 'text-stone-500 hover:text-green-700'}`}>
+                        <CheckSquare size={18} /> GTD タスク
+                        <span className="ml-auto text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{stats.gtdActive}</span>
+                    </button>
+                </div>
+
+                <div className="pt-4 border-t border-stone-200/50">
+                <div className="grid grid-cols-2 gap-2 px-2">
+                    <button onClick={() => handleViewChange('Type', CardType.Record)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Record ? 'bg-blue-100 border-blue-300 shadow-inner' : 'bg-blue-50 border-blue-100 hover:bg-blue-100'}`}>
+                        <div className="text-xl font-bold text-blue-600">{stats.record}</div>
+                        <div className="text-[10px] uppercase text-blue-400">RECORD</div>
+                    </button>
+                    <button onClick={() => handleViewChange('Type', CardType.Discovery)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Discovery ? 'bg-red-100 border-red-300 shadow-inner' : 'bg-red-50 border-red-100 hover:bg-red-100'}`}>
+                        <div className="text-xl font-bold text-red-600">{stats.discovery}</div>
+                        <div className="text-[10px] uppercase text-red-400">DISCOVERY</div>
+                    </button>
+                    <button onClick={() => handleViewChange('Type', CardType.GTD)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.GTD ? 'bg-green-100 border-green-300 shadow-inner' : 'bg-green-50 border-green-100 hover:bg-green-100'}`}>
+                        <div className="text-xl font-bold text-green-600">{stats.gtdTotal}</div>
+                        <div className="text-[10px] uppercase text-green-400">GTD</div>
+                    </button>
+                    <button onClick={() => handleViewChange('Type', CardType.Reference)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Reference ? 'bg-yellow-100 border-yellow-300 shadow-inner' : 'bg-yellow-50 border-yellow-100 hover:bg-yellow-100'}`}>
+                        <div className="text-xl font-bold text-yellow-600">{stats.reference}</div>
+                        <div className="text-[10px] uppercase text-yellow-400">REFERENCE</div>
+                    </button>
+                </div>
+                </div>
+
+                <div className="pt-2 border-t border-stone-200/50">
+                    <h3 className="px-3 text-xs font-bold text-stone-400 uppercase tracking-wider mb-2 flex items-center gap-2 mt-4">
+                        <Tag size={12} /> タグ
+                    </h3>
+                    <div className="space-y-1">
+                        {allStacks.map(stack => (
+                            <button key={stack.name} onClick={() => handleViewChange('Stack', stack.name)} className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors flex justify-between items-center ${activeStack === stack.name ? 'bg-stone-200 text-stone-900 font-medium' : 'text-stone-500 hover:text-stone-800'}`}>
+                                <span className="truncate">{stack.name}</span>
+                                <span className="text-xs bg-stone-200/50 px-1.5 py-0.5 rounded-full text-stone-400">{stack.count}</span>
+                            </button>
+                        ))}
+                        {allStacks.length === 0 && <p className="px-3 text-xs text-stone-300 italic">No tags yet</p>}
+                    </div>
+                </div>
+
+                <div className="pt-2 border-t border-stone-200/50">
+                    <h3 className="px-3 text-xs font-bold text-stone-400 uppercase tracking-wider mb-2 flex items-center gap-2 mt-4">
+                        <Cloud size={12} /> Sync
+                    </h3>
+                    {dropboxToken ? (
+                        <div className="px-3 space-y-2">
+                            <button 
+                                onClick={handleDisconnectDropbox}
+                                className="w-full bg-blue-100 text-blue-700 text-xs py-2 rounded-md font-bold hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Cloud size={14} />
+                                {isSyncing ? '同期中...' : 'Dropbox 接続済み'}
+                            </button>
+                            <button 
+                                onClick={handleManualSync}
+                                disabled={isSyncing}
+                                className="w-full bg-stone-200 text-stone-600 text-xs py-2 rounded-md font-bold hover:bg-stone-300 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                            >
+                                <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
+                                今すぐ同期
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="px-3">
+                            <button 
+                                onClick={handleConnectDropbox}
+                                className="w-full bg-stone-200 text-stone-600 text-xs py-2 rounded-md font-bold hover:bg-stone-300 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Cloud size={14} />
+                                Dropbox に接続
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                <div className="pt-4 border-t border-stone-200/50">
+                    <button 
+                        onClick={() => setIsSettingsOpen(true)}
+                        className="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors"
+                    >
+                        <Settings size={18} />
+                        設定
+                    </button>
+                </div>
             </nav>
         </div>
       </aside>
 
-      {/* Main Content Area... (Same as before) */}
+      {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto bg-stone-200">
         {/* Sticky Header */}
         <header className="sticky top-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 mb-4 border-b border-stone-300/30">
             <div className="flex items-center gap-3 flex-1">
-                <button onClick={toggleSidebar} className="text-stone-600 hover:bg-stone-300 p-2 rounded-md transition-colors"><Menu size={20} /></button>
-                <button onClick={handleHome} title="すべて表示" className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"><Home size={20} /></button>
-                <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} /><input type="text" placeholder="検索..." className="w-full pl-9 pr-4 py-2 bg-white border border-stone-300/50 rounded-full text-sm focus:ring-2 focus:ring-stone-400 focus:border-stone-400 transition-all outline-none shadow-sm" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />{searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs">クリア</button>}</div>
+                <button 
+                    onClick={toggleSidebar} 
+                    className="text-stone-600 hover:bg-stone-300 p-2 rounded-md transition-colors"
+                >
+                    <Menu size={20} />
+                </button>
+                
+                <button onClick={handleHome} title="すべて表示" className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors">
+                    <Home size={20} />
+                </button>
+                <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
+                    <input type="text" placeholder="検索..." className="w-full pl-9 pr-4 py-2 bg-white border border-stone-300/50 rounded-full text-sm focus:ring-2 focus:ring-stone-400 focus:border-stone-400 transition-all outline-none shadow-sm" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                    {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs">クリア</button>}
+                </div>
                 {viewMode === 'GTD' && <div className="hidden sm:flex items-center gap-2 text-xs text-stone-500 bg-white px-3 py-1.5 rounded-full border border-stone-200 shadow-sm"><Filter size={12} /><span>並び順: 期限</span></div>}
             </div>
             <div className="ml-4 flex items-center gap-2">
                 <button onClick={handleRandomCard} title="ランダムにカードを表示" className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"><Shuffle size={20} /></button>
                 <button onClick={handleToggleSelection} title={isSelectionMode ? "選択モードを終了" : "複数選択"} className={`p-2 rounded-full transition-colors ${isSelectionMode ? 'bg-stone-800 text-white' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'}`}><SelectIcon size={20} /></button>
-                {isSelectionMode && (<button onClick={handleSelectAll} title="表示中のカードをすべて選択" className={`p-2 rounded-full transition-colors ${filteredCards.length > 0 && filteredCards.every(c => selectedCardIds.has(c.id)) ? 'bg-blue-100 text-blue-600' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'}`}><CheckCheck size={20} /></button>)}
-                {isSelectionMode && selectedCardIds.size > 0 && (<><button onClick={() => setShowBatchTagModal(true)} title="タグの管理" className="bg-stone-800 hover:bg-stone-900 text-white p-2 rounded-full shadow-lg transition-colors flex items-center gap-2"><Tag size={20} /></button><button onClick={handleClickDeleteSelected} title={`${selectedCardIds.size}枚のカードを削除`} className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full shadow-lg transition-colors flex items-center gap-2"><Trash2 size={20} /><span className="text-xs font-bold hidden sm:inline">{selectedCardIds.size}</span></button></>)}
+                {isSelectionMode && (
+                    <button
+                        onClick={handleSelectAll}
+                        title="表示中のカードをすべて選択"
+                        className={`p-2 rounded-full transition-colors ${
+                            filteredCards.length > 0 && filteredCards.every(c => selectedCardIds.has(c.id))
+                                ? 'bg-blue-100 text-blue-600'
+                                : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'
+                        }`}
+                    >
+                        <CheckCheck size={20} />
+                    </button>
+                )}
+                {isSelectionMode && selectedCardIds.size > 0 && (
+                    <>
+                        <button onClick={() => setShowBatchTagModal(true)} title="タグの管理" className="bg-stone-800 hover:bg-stone-900 text-white p-2 rounded-full shadow-lg transition-colors flex items-center gap-2"><Tag size={20} /></button>
+                        <button onClick={handleClickDeleteSelected} title={`${selectedCardIds.size}枚のカードを削除`} className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full shadow-lg transition-colors flex items-center gap-2"><Trash2 size={20} /><span className="text-xs font-bold hidden sm:inline">{selectedCardIds.size}</span></button>
+                    </>
+                )}
             </div>
         </header>
 
-        {/* Feed */}
+        {/* Scrollable Feed Content */}
         <div className="px-2 sm:px-6 w-full max-w-[1920px] mx-auto pb-20">
             <div className="mb-4 flex items-center justify-between pl-2 border-l-4 border-stone-400">
-                <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">{viewMode === 'All' && (searchQuery ? `検索: "${searchQuery}"` : 'Dock (全カード)')}{viewMode === 'Stack' && `タグ: ${activeStack}`}{viewMode === 'Type' && `分類: ${activeType}`}{viewMode === 'GTD' && 'アクション'}</h2>
-                <div className="flex items-center gap-2"><button onClick={handleExportOPML} title="OPMLをコピー" className="flex items-center gap-1 text-xs font-mono text-stone-500 hover:text-stone-800 bg-stone-300/30 hover:bg-stone-300/60 px-2 py-1 rounded transition-colors"><Copy size={12} /><span className="hidden sm:inline">OPML</span></button><span className="text-xs font-mono text-stone-500 bg-stone-300/50 px-2 py-1 rounded">{filteredCards.length} cards</span></div>
+                <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">
+                    {viewMode === 'All' && (searchQuery ? `検索: "${searchQuery}"` : 'Dock (全カード)')}
+                    {viewMode === 'Stack' && `タグ: ${activeStack}`}
+                    {viewMode === 'Type' && `分類: ${activeType}`}
+                    {viewMode === 'GTD' && 'アクション'}
+                </h2>
+                <div className="flex items-center gap-2">
+                     <button onClick={handleExportOPML} title="OPMLをコピー" className="flex items-center gap-1 text-xs font-mono text-stone-500 hover:text-stone-800 bg-stone-300/30 hover:bg-stone-300/60 px-2 py-1 rounded transition-colors"><Copy size={12} /><span className="hidden sm:inline">OPML</span></button>
+                    <span className="text-xs font-mono text-stone-500 bg-stone-300/50 px-2 py-1 rounded">{filteredCards.length} cards</span>
+                </div>
             </div>
 
             <div className={viewMode === 'GTD' ? '' : gridClasses}>
-                {/* Pinned */}
-                {pinnedCards.length > 0 && (<><div className="col-span-full flex items-center gap-2 mb-2"><Pin size={16} className="text-stone-400" /><span className="text-xs font-bold text-stone-400 uppercase tracking-wider">Pinned</span><div className="h-px flex-1 bg-stone-300/50"></div></div>{pinnedCards.map(card => (<CardItem key={card.id} domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} />))}<div className="col-span-full h-4"></div></>)}
+                {/* Pinned Cards Section */}
+                {pinnedCards.length > 0 && (
+                    <>
+                        <div className="col-span-full flex items-center gap-2 mb-2">
+                            <Pin size={16} className="text-stone-400" />
+                            <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">Pinned</span>
+                            <div className="h-px flex-1 bg-stone-300/50"></div>
+                        </div>
+                        {pinnedCards.map(card => (
+                            <CardItem 
+                                key={card.id} 
+                                domId={`card-${card.id}`}
+                                card={card} 
+                                dateFormat={dateFormat} 
+                                onClick={openEditCardEditor}
+                                onLinkClick={handleLinkClick}
+                                onToggleComplete={toggleGTDComplete}
+                                onStackClick={(s) => handleViewChange('Stack', s)}
+                                onTogglePin={togglePin}
+                                isSelectionMode={isSelectionMode}
+                                isSelected={selectedCardIds.has(card.id)}
+                                onSelect={handleSelectCard}
+                            />
+                        ))}
+                        {/* Divider between Pinned and Main */}
+                        <div className="col-span-full h-4"></div> 
+                    </>
+                )}
 
-                {/* Main Feed */}
                 {viewMode === 'GTD' && gtdGroups ? (
-                    <div className="col-span-full space-y-6">{(Object.entries(gtdGroups) as [string, Card[]][]).map(([groupName, groupCards]) => (groupCards.length > 0 && (<div key={groupName}><h3 className={`text-xs font-bold uppercase tracking-wider mb-2 pl-2 border-l-2 ${groupName === '期限切れ' ? 'border-red-500 text-red-500' : groupName === '今日' ? 'border-green-500 text-green-600' : 'border-stone-400 text-stone-500'}`}>{groupName}</h3><div className={gridClasses + " items-start"}> {groupCards.map((card) => (<CardItem key={card.id} domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} />))}</div></div>)))}</div>
+                    <div className="col-span-full space-y-6">
+                        {(Object.entries(gtdGroups) as [string, Card[]][]).map(([groupName, groupCards]) => (
+                            groupCards.length > 0 && (
+                                <div key={groupName}>
+                                    <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 pl-2 border-l-2 ${
+                                        groupName === '期限切れ' ? 'border-red-500 text-red-500' : 
+                                        groupName === '今日' ? 'border-green-500 text-green-600' : 'border-stone-400 text-stone-500'
+                                    }`}>
+                                        {groupName}
+                                    </h3>
+                                    <div className={gridClasses + " items-start"}> 
+                                        {groupCards.map((card) => (
+                                            <CardItem 
+                                                key={card.id} 
+                                                domId={`card-${card.id}`}
+                                                card={card} 
+                                                dateFormat={dateFormat} 
+                                                onClick={openEditCardEditor}
+                                                onLinkClick={handleLinkClick}
+                                                onToggleComplete={toggleGTDComplete}
+                                                onStackClick={(s) => handleViewChange('Stack', s)}
+                                                onTogglePin={togglePin}
+                                                isSelectionMode={isSelectionMode}
+                                                isSelected={selectedCardIds.has(card.id)}
+                                                onSelect={handleSelectCard}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            )
+                        ))}
+                    </div>
                 ) : (
                     <>
                         {unpinnedCards.map((card, index) => {
@@ -881,15 +1037,49 @@ ${opmlBody}
                              const currentMonth = new Date(card.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' });
                              const prevMonth = prevCard ? new Date(prevCard.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' }) : null;
                              const showDivider = index > 0 && currentMonth !== prevMonth;
-                             return (<React.Fragment key={card.id}>{showDivider && (<div className="col-span-full flex items-center gap-2 my-4 px-2 opacity-60"><div className="h-px flex-1 bg-stone-300"></div><span className="text-xs font-mono font-bold text-stone-500">{currentMonth}</span><div className="h-px flex-1 bg-stone-300"></div></div>)}<CardItem domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} /></React.Fragment>);
+
+                             return (
+                                <React.Fragment key={card.id}>
+                                    {showDivider && (
+                                        <div className="col-span-full flex items-center gap-2 my-4 px-2 opacity-60">
+                                            <div className="h-px flex-1 bg-stone-300"></div>
+                                            <span className="text-xs font-mono font-bold text-stone-500">{currentMonth}</span>
+                                            <div className="h-px flex-1 bg-stone-300"></div>
+                                        </div>
+                                    )}
+                                    <CardItem 
+                                        domId={`card-${card.id}`}
+                                        card={card} 
+                                        dateFormat={dateFormat} 
+                                        onClick={openEditCardEditor}
+                                        onLinkClick={handleLinkClick}
+                                        onToggleComplete={toggleGTDComplete}
+                                        onStackClick={(s) => handleViewChange('Stack', s)}
+                                        onTogglePin={togglePin}
+                                        isSelectionMode={isSelectionMode}
+                                        isSelected={selectedCardIds.has(card.id)}
+                                        onSelect={handleSelectCard}
+                                    />
+                                </React.Fragment>
+                             );
                         })}
-                        {unpinnedCards.length === 0 && (<div className="col-span-full text-center py-20 opacity-50"><Library size={48} className="mx-auto mb-4 text-stone-400" /><p className="text-stone-500 font-serif italic">カードが見つかりません。</p></div>)}
+                        
+                        {unpinnedCards.length === 0 && (
+                            <div className="col-span-full text-center py-20 opacity-50">
+                                <Library size={48} className="mx-auto mb-4 text-stone-400" />
+                                <p className="text-stone-500 font-serif italic">カードが見つかりません。</p>
+                            </div>
+                        )}
                     </>
                 )}
             </div>
         </div>
         
-        {!isSelectionMode && (<button onClick={openNewCardEditor} className="fixed bottom-6 right-6 z-40 bg-stone-800 hover:bg-stone-900 text-white p-4 rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center"><Plus size={24} /></button>)}
+        {!isSelectionMode && (
+            <button onClick={openNewCardEditor} className="fixed bottom-6 right-6 z-40 bg-stone-800 hover:bg-stone-900 text-white p-4 rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center">
+                <Plus size={24} />
+            </button>
+        )}
       </main>
     </div>
   );
