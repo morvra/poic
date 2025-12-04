@@ -12,7 +12,7 @@ interface EditorProps {
   onSave: (card: Partial<Card>, shouldClose?: boolean) => void;
   onCancel: () => void;
   onDelete?: (id: string) => void;
-  onNavigate: (term: string) => void;
+  onNavigate: (term: string, e?: React.MouseEvent) => void;
   backlinks?: Card[];
 }
 
@@ -66,7 +66,7 @@ export const Editor: React.FC<EditorProps> = ({
   const stackInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMouseDownRef = useRef(false); // Track mouse state to distinguish click vs tab focus
-  const savedScrollTop = useRef<number | null>(null); // To restore scroll position after switching mode
+  const savedScrollTop = useRef<number | null>(null);
   
   // Ref to track previous ID for detecting card switches vs auto-save updates
   const prevCardIdRef = useRef<string | undefined>(initialCard?.id);
@@ -642,7 +642,7 @@ export const Editor: React.FC<EditorProps> = ({
                     {backlinks.map(linkCard => (
                         <div 
                             key={linkCard.id}
-                            onClick={() => onNavigate(linkCard.title)}
+                            onClick={(e) => onNavigate(linkCard.title, e)}
                             className="bg-stone-50 border border-stone-200 rounded p-3 cursor-pointer hover:bg-stone-100 transition-colors"
                         >
                             <div className="text-sm font-bold text-stone-700">{linkCard.title}</div>
