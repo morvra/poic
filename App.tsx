@@ -25,7 +25,7 @@ import {
   Cloud,
   RefreshCw,
   Settings,
-  CheckCheck // Import CheckCheck
+  CheckCheck 
 } from 'lucide-react';
 
 // Enhanced initial data with 10 varied cards
@@ -466,7 +466,13 @@ export default function App() {
   };
 
   const handleExportOPML = () => {
-    const exportCards = filteredCards;
+    let exportCards = filteredCards;
+    
+    // Only export selected cards if in selection mode and selection exists
+    if (isSelectionMode && selectedCardIds.size > 0) {
+        exportCards = cards.filter(c => !c.isDeleted && selectedCardIds.has(c.id));
+    }
+
     if (exportCards.length === 0) {
         alert('出力するカードがありません。');
         return;
@@ -517,7 +523,7 @@ ${opmlBody}
 </body>
 </opml>`;
     navigator.clipboard.writeText(opml).then(() => {
-        alert('OPMLをコピーしました！');
+        alert(isSelectionMode ? `${exportCards.length}枚のカードをOPMLとしてコピーしました！` : 'OPMLをコピーしました！');
     }).catch(err => {
         console.error('Copy failed', err);
         alert('コピーに失敗しました');
@@ -865,7 +871,7 @@ ${opmlBody}
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto bg-stone-200">
-        {/* Sticky Header */}
+        {/* Sticky Header... (Same as before) */}
         <header className="sticky top-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 mb-4 border-b border-stone-300/30">
             <div className="flex items-center gap-3 flex-1">
                 {/* Unified Toggle Button */}
