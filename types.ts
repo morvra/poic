@@ -15,7 +15,8 @@ export interface Card {
   dueDate?: number; // Only for GTD
   completed?: boolean; // Only for GTD
   stacks: string[]; // "Task Forces" or Themes
-  isDeleted?: boolean; // Logical deletion flag for sync
+  isDeleted?: boolean;
+  isPinned?: number | boolean; // Timestamp of when it was pinned
 }
 
 export type ViewMode = 'All' | 'GTD' | 'Stack' | 'Type';
@@ -24,7 +25,7 @@ export interface PoicStats {
   total: number;
   record: number;
   discovery: number;
-  gtdActive: number; // 未完了のみ (メニュー用)
-  gtdTotal: number;  // 完了含むすべて (4タグカウント用)
+  gtdActive: number;
+  gtdTotal: number;
   reference: number;
 }

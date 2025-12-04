@@ -25,7 +25,8 @@ import {
   Cloud,
   RefreshCw,
   Settings,
-  CheckCheck 
+  CheckCheck,
+  Pin
 } from 'lucide-react';
 
 // Enhanced initial data with 10 varied cards
@@ -259,7 +260,8 @@ export default function App() {
         dueDate: cardData.dueDate,
         completed: false,
         stacks: cardData.stacks || [],
-        isDeleted: false
+        isDeleted: false,
+        isPinned: false
       };
       setCards([newCard, ...cards]); 
       
@@ -350,6 +352,18 @@ export default function App() {
     ));
   };
 
+  const togglePin = (id: string) => {
+      setCards(cards.map(c => {
+          if (c.id === id) {
+              // If currently pinned, set to false/undefined. 
+              // If unpinned, set to current timestamp (number).
+              const newPinnedState = c.isPinned ? false : Date.now();
+              return { ...c, isPinned: newPinnedState, updatedAt: Date.now() };
+          }
+          return c;
+      }));
+  };
+
   const handleLinkClick = (term: string) => {
     if (term.startsWith('#')) {
         setSearchQuery(term);
@@ -371,7 +385,8 @@ export default function App() {
             createdAt: Date.now(),
             updatedAt: Date.now(),
             stacks: [],
-            isDeleted: false
+            isDeleted: false,
+            isPinned: false
         });
         setEditingCardId(null);
         setIsEditorOpen(true);
@@ -395,7 +410,8 @@ export default function App() {
                   createdAt: Date.now(),
                   updatedAt: Date.now(),
                   stacks: [],
-                  isDeleted: false
+                  isDeleted: false,
+                  isPinned: false
               });
               setEditingCardId(null);
           }
@@ -598,6 +614,35 @@ ${opmlBody}
     return result;
   }, [cards, viewMode, activeStack, activeType, searchQuery]);
 
+  // Split filtered cards into pinned and unpinned
+  const { pinnedCards, unpinnedCards } = useMemo(() => {
+      // Logic: 
+      // 1. Separate based on isPinned truthiness
+      // 2. Sort pinned cards by pin timestamp (asc - oldest first)
+      // 3. Keep unpinned cards in their original sorted order (desc created or GTD sort)
+      
+      const pinned: Card[] = [];
+      const unpinned: Card[] = [];
+
+      filteredCards.forEach(card => {
+          if (card.isPinned) {
+              pinned.push(card);
+          } else {
+              unpinned.push(card);
+          }
+      });
+
+      // Sort pinned cards: Oldest pin first
+      // Handle boolean legacy (treat true as very old/0)
+      pinned.sort((a, b) => {
+          const timeA = typeof a.isPinned === 'number' ? a.isPinned : 0;
+          const timeB = typeof b.isPinned === 'number' ? b.isPinned : 0;
+          return timeA - timeB;
+      });
+
+      return { pinnedCards: pinned, unpinnedCards: unpinned };
+  }, [filteredCards]);
+
   const activeCardForEditor = useMemo(() => {
     if (phantomCard) return phantomCard as Card; // Prioritize phantom (link creation)
     if (!editingCardId) return undefined;
@@ -623,7 +668,11 @@ ${opmlBody}
       '期限なし': [],
       '完了': []
     };
-    filteredCards.forEach(card => {
+    // Note: Use unpinnedCards here because pinned cards are shown in the pinned section
+    // Actually, for GTD view, user might want to see Pinned GTD tasks at top, then the groups.
+    // The Pinned Section handles the display of pinned items regardless of GTD grouping for now.
+    // So we just iterate over unpinnedCards to populate the groups below the pinned section.
+    unpinnedCards.forEach(card => {
       if (card.completed) {
         groups['完了'].push(card);
         return;
@@ -639,7 +688,7 @@ ${opmlBody}
       else groups['明日以降'].push(card);
     });
     return groups;
-  }, [filteredCards, viewMode]);
+  }, [unpinnedCards, viewMode]);
 
   // Determine grid columns based on desktop sidebar state
   const gridClasses = isDesktopSidebarOpen 
@@ -936,8 +985,37 @@ ${opmlBody}
             </div>
 
             <div className={viewMode === 'GTD' ? '' : gridClasses}>
+                {/* Pinned Cards Section */}
+                {pinnedCards.length > 0 && (
+                    <>
+                        <div className="col-span-full flex items-center gap-2 mb-2">
+                            <Pin size={16} className="text-stone-400" />
+                            <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">Pinned</span>
+                            <div className="h-px flex-1 bg-stone-300/50"></div>
+                        </div>
+                        {pinnedCards.map(card => (
+                            <CardItem 
+                                key={card.id} 
+                                domId={`card-${card.id}`}
+                                card={card} 
+                                dateFormat={dateFormat} 
+                                onClick={openEditCardEditor}
+                                onLinkClick={handleLinkClick}
+                                onToggleComplete={toggleGTDComplete}
+                                onStackClick={(s) => handleViewChange('Stack', s)}
+                                onTogglePin={togglePin}
+                                isSelectionMode={isSelectionMode}
+                                isSelected={selectedCardIds.has(card.id)}
+                                onSelect={handleSelectCard}
+                            />
+                        ))}
+                        {/* Divider between Pinned and Main */}
+                        <div className="col-span-full h-4"></div> 
+                    </>
+                )}
+
                 {viewMode === 'GTD' && gtdGroups ? (
-                    <div className="space-y-6">
+                    <div className="col-span-full space-y-6">
                         {(Object.entries(gtdGroups) as [string, Card[]][]).map(([groupName, groupCards]) => (
                             groupCards.length > 0 && (
                                 <div key={groupName}>
@@ -958,6 +1036,7 @@ ${opmlBody}
                                                 onLinkClick={handleLinkClick}
                                                 onToggleComplete={toggleGTDComplete}
                                                 onStackClick={(s) => handleViewChange('Stack', s)}
+                                                onTogglePin={togglePin}
                                                 isSelectionMode={isSelectionMode}
                                                 isSelected={selectedCardIds.has(card.id)}
                                                 onSelect={handleSelectCard}
@@ -970,8 +1049,8 @@ ${opmlBody}
                     </div>
                 ) : (
                     <>
-                        {filteredCards.map((card, index) => {
-                             const prevCard = filteredCards[index - 1];
+                        {unpinnedCards.map((card, index) => {
+                             const prevCard = unpinnedCards[index - 1];
                              const currentMonth = new Date(card.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' });
                              const prevMonth = prevCard ? new Date(prevCard.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' }) : null;
                              const showDivider = index > 0 && currentMonth !== prevMonth;
@@ -993,6 +1072,7 @@ ${opmlBody}
                                         onLinkClick={handleLinkClick}
                                         onToggleComplete={toggleGTDComplete}
                                         onStackClick={(s) => handleViewChange('Stack', s)}
+                                        onTogglePin={togglePin}
                                         isSelectionMode={isSelectionMode}
                                         isSelected={selectedCardIds.has(card.id)}
                                         onSelect={handleSelectCard}
@@ -1001,7 +1081,7 @@ ${opmlBody}
                              );
                         })}
                         
-                        {filteredCards.length === 0 && (
+                        {unpinnedCards.length === 0 && (
                             <div className="col-span-full text-center py-20 opacity-50">
                                 <Library size={48} className="mx-auto mb-4 text-stone-400" />
                                 <p className="text-stone-500 font-serif italic">カードが見つかりません。</p>

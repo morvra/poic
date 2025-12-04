@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardType } from '../types';
 import { formatTimestampByPattern, formatDateWithDay } from '../utils';
 import { CardRenderer } from './CardRenderer';
-import { Clock, CheckCircle, Circle, FileText, Lightbulb, CheckSquare, BookOpen, Square, Trash2 } from 'lucide-react';
+import { Clock, CheckCircle, Circle, FileText, Lightbulb, CheckSquare, BookOpen, Square, Trash2, Pin } from 'lucide-react';
 
 interface CardItemProps {
   card: Card;
@@ -11,6 +11,7 @@ interface CardItemProps {
   onLinkClick: (term: string) => void;
   onToggleComplete?: (id: string) => void;
   onStackClick?: (stack: string) => void;
+  onTogglePin?: (id: string) => void;
   style?: React.CSSProperties;
   domId?: string; 
   
@@ -28,10 +29,10 @@ const TYPE_COLORS_BG = {
 };
 
 const TYPE_BORDER_COLOR = {
-    [CardType.Record]: 'border-l-blue-500',
-    [CardType.Discovery]: 'border-l-red-500',
-    [CardType.GTD]: 'border-l-green-500',
-    [CardType.Reference]: 'border-l-yellow-500',
+    [CardType.Record]: 'border-t-blue-500',
+    [CardType.Discovery]: 'border-t-red-500',
+    [CardType.GTD]: 'border-t-green-500',
+    [CardType.Reference]: 'border-t-yellow-500',
 }
 
 const SHORT_TYPE_NAMES = {
@@ -51,7 +52,7 @@ const TypeIcon = ({ type, className }: { type: CardType, className?: string }) =
 };
 
 export const CardItem: React.FC<CardItemProps> = ({ 
-  card, dateFormat, onClick, onLinkClick, onToggleComplete, onStackClick, style, domId,
+  card, dateFormat, onClick, onLinkClick, onToggleComplete, onStackClick, onTogglePin, style, domId,
   isSelectionMode, isSelected, onSelect
 }) => {
   const isGTD = card.type === CardType.GTD;
@@ -72,7 +73,7 @@ export const CardItem: React.FC<CardItemProps> = ({
       id={domId}
       onClick={handleClick}
       className={`
-        group relative w-full h-full md:min-h-[12rem] bg-paper rounded-sm border border-l-[4px] ${borderClass}
+        group relative w-full h-full md:min-h-[12rem] bg-paper rounded-sm border border-t-[4px] ${borderClass}
         shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer
         mb-1 overflow-hidden
         ${isSelected ? 'border-stone-400 bg-stone-50 ring-2 ring-stone-400' : 'border-stone-200'}
@@ -96,6 +97,17 @@ export const CardItem: React.FC<CardItemProps> = ({
                     <span className="hidden sm:inline">{SHORT_TYPE_NAMES[card.type]}</span>
                 </div>
                 
+                {/* Pin Icon - Only show if already pinned (to allow unpinning) */}
+                {onTogglePin && !isSelectionMode && card.isPinned && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onTogglePin(card.id); }}
+                        className="shrink-0 text-yellow-500 hover:text-stone-400 transition-colors"
+                        title="ピン留めを解除"
+                    >
+                        <Pin size={16} fill="currentColor" />
+                    </button>
+                )}
+
                 {/* Title */}
                 <h3 className={`font-bold text-ink text-[16px] leading-tight truncate group-hover:text-stone-700 transition-colors ${card.completed ? 'text-stone-400' : ''}`}>
                   {card.title}
@@ -142,8 +154,8 @@ export const CardItem: React.FC<CardItemProps> = ({
              )}
         </div>
 
-        {/* Body Preview */}
-        <div className="relative mb-auto">
+        {/* Body Preview - Removed mt-auto to align top */}
+        <div className="relative">
              <div className="line-clamp-3 font-sans text-sm text-ink/90 leading-relaxed">
                 <CardRenderer content={card.body} onLinkClick={onLinkClick} />
              </div>

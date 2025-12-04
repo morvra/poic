@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardType } from '../types';
 import { formatTimeShort, formatTimestampByPattern } from '../utils';
 import { CardRenderer } from './CardRenderer';
-import { Calendar, Save, X, Trash2, Clock, CheckCircle, Circle, Link as LinkIcon, AlertTriangle, FileText, Lightbulb, CheckSquare, BookOpen } from 'lucide-react';
+import { Calendar, Save, X, Trash2, Clock, CheckCircle, Circle, Link as LinkIcon, AlertTriangle, FileText, Lightbulb, CheckSquare, BookOpen, Pin } from 'lucide-react';
 
 interface EditorProps {
   initialCard?: Card;
@@ -50,6 +50,7 @@ export const Editor: React.FC<EditorProps> = ({
   );
   const [stacks, setStacks] = useState(initialCard?.stacks?.join(', ') || '');
   const [completed, setCompleted] = useState(initialCard?.completed || false);
+  const [isPinned, setIsPinned] = useState<number | boolean>(initialCard?.isPinned || false);
   
   // Edit Mode State for Body
   const [isEditingBody, setIsEditingBody] = useState(!initialCard || !initialCard.id); 
@@ -86,7 +87,7 @@ export const Editor: React.FC<EditorProps> = ({
     }
   }, [initialCard?.id]);
 
-  // Focus Title on New Card (ONLY if no title provided e.g. phantom)
+  // Focus Title on New Card
   useEffect(() => {
       if ((!initialCard || (!initialCard.id && !initialCard.title)) && titleInputRef.current) {
           setTimeout(() => {
@@ -118,6 +119,7 @@ export const Editor: React.FC<EditorProps> = ({
           setCreatedAt(new Date(initialCard.createdAt - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16));
           setStacks(initialCard.stacks?.join(', ') || '');
           setCompleted(initialCard.completed || false);
+          setIsPinned(initialCard.isPinned || false);
           setShowDeleteConfirm(false);
           
           if (!initialCard.id) {
@@ -141,7 +143,7 @@ export const Editor: React.FC<EditorProps> = ({
       return () => {
           if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       };
-  }, [title, body, type, dueDate, stacks, createdAt, completed]);
+  }, [title, body, type, dueDate, stacks, createdAt, completed, isPinned]);
 
   const handleAutoSave = () => {
     if (!title.trim() && !body.trim()) return; 
@@ -163,7 +165,13 @@ export const Editor: React.FC<EditorProps> = ({
       stacks: stackList,
       createdAt: createdTimestamp,
       completed: type === CardType.GTD ? completed : false,
+      isPinned
     }, false); 
+  };
+
+  const handleTogglePin = () => {
+      const newState = isPinned ? false : Date.now();
+      setIsPinned(newState);
   };
 
   // Focus textarea when switching to edit mode
@@ -255,7 +263,6 @@ export const Editor: React.FC<EditorProps> = ({
     const end = bodyRef.current.selectionEnd;
     const newBody = body.substring(0, start) + timestampStr + body.substring(end);
     setBody(newBody);
-    // Focus handled by useEffect or manual ref access, ensuring cursor placement
     setTimeout(() => {
         if(bodyRef.current) {
             bodyRef.current.selectionStart = bodyRef.current.selectionEnd = start + timestampStr.length;
@@ -442,6 +449,13 @@ export const Editor: React.FC<EditorProps> = ({
                 <Trash2 size={20} />
              </button>
            )}
+           <button
+              onClick={handleTogglePin}
+              className={`p-2 rounded-full transition-colors ${isPinned ? 'text-yellow-500' : 'text-stone-300 hover:text-stone-500'}`}
+              title={isPinned ? "ピン留めを解除" : "ピン留め"}
+           >
+              <Pin size={20} fill={isPinned ? "currentColor" : "none"} />
+           </button>
           <button onClick={onCancel} className="text-stone-400 hover:text-stone-600 p-2 rounded-full hover:bg-stone-100 transition-colors">
               <X size={24} />
           </button>
@@ -463,7 +477,7 @@ export const Editor: React.FC<EditorProps> = ({
                     title={t}
                 >
                     <TypeIcon type={t} />
-                    <span className="hidden sm:inline">{t}</span>
+                    {/* Removed text label as requested */}
                 </button>
                 ))}
             </div>
