@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardType } from '../types';
 import { formatTimeShort, formatTimestampByPattern } from '../utils';
 import { CardRenderer } from './CardRenderer';
-import { Calendar, Save, X, Trash2, Clock, CheckCircle, Circle, Link as LinkIcon, AlertTriangle, FileText, Lightbulb, CheckSquare, BookOpen, Pin } from 'lucide-react';
+import { Calendar, Save, X, Trash2, Clock, CheckCircle, Circle, Link as LinkIcon, AlertTriangle, FileText, Lightbulb, CheckSquare, BookOpen, Pin, ArrowRightFromLine } from 'lucide-react';
 
 interface EditorProps {
   initialCard?: Card;
@@ -13,10 +13,11 @@ interface EditorProps {
   onCancel: () => void;
   onDelete?: (id: string) => void;
   onNavigate: (term: string, e?: React.MouseEvent) => void;
+  onMoveToSide?: (id: string) => void; // New prop
   backlinks?: Card[];
 }
 
-// Icons for the selector
+// ... (TypeIcon component unchanged)
 const TypeIcon = ({ type, className }: { type: CardType, className?: string }) => {
     switch (type) {
         case CardType.Record: return <FileText size={16} className={className} />;
@@ -35,8 +36,10 @@ export const Editor: React.FC<EditorProps> = ({
   onCancel, 
   onDelete, 
   onNavigate, 
+  onMoveToSide, // Destructure new prop
   backlinks = [] 
 }) => {
+  // ... (State definitions unchanged)
   const [type, setType] = useState<CardType>(initialCard?.type || CardType.Record);
   const [title, setTitle] = useState(initialCard?.title || '');
   const [body, setBody] = useState(initialCard?.body || '');
@@ -52,11 +55,8 @@ export const Editor: React.FC<EditorProps> = ({
   const [completed, setCompleted] = useState(initialCard?.completed || false);
   const [isPinned, setIsPinned] = useState<number | boolean>(initialCard?.isPinned || false);
   
-  // Edit Mode State for Body
   const [isEditingBody, setIsEditingBody] = useState(!initialCard || !initialCard.id); 
   const [initialCursorOffset, setInitialCursorOffset] = useState<number | null>(null);
-  
-  // Delete Confirmation State
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -65,13 +65,12 @@ export const Editor: React.FC<EditorProps> = ({
   const readViewRef = useRef<HTMLDivElement>(null);
   const stackInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isMouseDownRef = useRef(false); // Track mouse state to distinguish click vs tab focus
+  const isMouseDownRef = useRef(false);
   const savedScrollTop = useRef<number | null>(null);
   
-  // Ref to track previous ID for detecting card switches vs auto-save updates
   const prevCardIdRef = useRef<string | undefined>(initialCard?.id);
 
-  // --- Autocomplete State ---
+  // ... (State and Effects for autocomplete, scroll, focus, auto-save unchanged)
   const [wikiSuggestions, setWikiSuggestions] = useState<string[]>([]);
   const [showWikiSuggestions, setShowWikiSuggestions] = useState(false);
   const [wikiSuggestionPos, setWikiSuggestionPos] = useState({ top: 0, left: 0 });
@@ -81,14 +80,12 @@ export const Editor: React.FC<EditorProps> = ({
   const [showStackSuggestions, setShowStackSuggestions] = useState(false);
   const [stackSuggestionIndex, setStackSuggestionIndex] = useState(0);
   
-  // Scroll to top when switching cards
   useEffect(() => {
     if (containerRef.current) {
         containerRef.current.scrollTop = 0;
     }
   }, [initialCard?.id]);
 
-  // Focus Title on New Card
   useEffect(() => {
       if ((!initialCard || (!initialCard.id && !initialCard.title)) && titleInputRef.current) {
           setTimeout(() => {
@@ -97,7 +94,6 @@ export const Editor: React.FC<EditorProps> = ({
       }
   }, [initialCard]);
 
-  // Auto-resize textarea when body changes
   useEffect(() => {
     if (isEditingBody && bodyRef.current) {
       bodyRef.current.style.height = 'auto';
@@ -105,7 +101,6 @@ export const Editor: React.FC<EditorProps> = ({
     }
   }, [body, isEditingBody]);
 
-  // Update state when initialCard changes
   useEffect(() => {
       const currentId = initialCard?.id;
       const prevId = prevCardIdRef.current;
@@ -131,13 +126,12 @@ export const Editor: React.FC<EditorProps> = ({
       prevCardIdRef.current = currentId;
   }, [initialCard?.id, initialCard]);
 
-  // Auto-save logic
   useEffect(() => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
       saveTimeoutRef.current = setTimeout(() => {
           handleAutoSave();
-      }, 800); // Debounce auto-save
+      }, 800); 
 
       return () => {
           if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -146,15 +140,12 @@ export const Editor: React.FC<EditorProps> = ({
 
   const handleAutoSave = () => {
     if (!title.trim() && !body.trim()) return; 
-
     let dueTimestamp: number | undefined = undefined;
     if (type === CardType.GTD && dueDate) {
       dueTimestamp = new Date(dueDate).getTime();
     }
-    
     const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
     const createdTimestamp = new Date(createdAt).getTime();
-    
     onSave({
       id: initialCard?.id,
       title,
@@ -173,29 +164,22 @@ export const Editor: React.FC<EditorProps> = ({
       setIsPinned(newState);
   };
 
-  // Focus textarea and restore scroll when switching to edit mode
   useEffect(() => {
       if (isEditingBody && bodyRef.current) {
-          // Ensure height is correct before restoring scroll
           bodyRef.current.style.height = 'auto';
           bodyRef.current.style.height = `${bodyRef.current.scrollHeight}px`;
-
           const isPhantom = !initialCard?.id && !!initialCard?.title;
           const isExplicitEdit = !!initialCard?.id; 
           const isTabFocus = document.activeElement === readViewRef.current;
-
           if (isPhantom || isExplicitEdit || isTabFocus) {
               bodyRef.current.focus();
           }
-          
           if (initialCursorOffset !== null) {
               const len = bodyRef.current.value.length;
               const pos = Math.min(Math.max(0, initialCursorOffset), len);
               bodyRef.current.setSelectionRange(pos, pos);
               setInitialCursorOffset(null);
           }
-
-          // Restore scroll position if saved
           if (savedScrollTop.current !== null && containerRef.current) {
               containerRef.current.scrollTop = savedScrollTop.current;
               savedScrollTop.current = null;
@@ -203,10 +187,8 @@ export const Editor: React.FC<EditorProps> = ({
       }
   }, [isEditingBody]); 
 
-  // Shortcut for Timestamp: Alt + T
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Timestamp
       if (e.altKey && e.key.toLowerCase() === 't') {
         e.preventDefault();
         if (!isEditingBody) {
@@ -217,49 +199,27 @@ export const Editor: React.FC<EditorProps> = ({
              insertTimestamp();
         }
       }
-
-      // Autocomplete Navigation
+      // ... (Autocomplete logic omitted for brevity) ...
       if (showWikiSuggestions) {
-          if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              setWikiSuggestionIndex(prev => (prev + 1) % wikiSuggestions.length);
-          } else if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              setWikiSuggestionIndex(prev => (prev - 1 + wikiSuggestions.length) % wikiSuggestions.length);
-          } else if (e.key === 'Enter' || e.key === 'Tab') {
-              e.preventDefault();
-              selectWikiSuggestion(wikiSuggestions[wikiSuggestionIndex]);
-          } else if (e.key === 'Escape') {
-              setShowWikiSuggestions(false);
-              e.stopPropagation(); 
-          }
+          if (e.key === 'ArrowDown') { e.preventDefault(); setWikiSuggestionIndex(prev => (prev + 1) % wikiSuggestions.length); } 
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setWikiSuggestionIndex(prev => (prev - 1 + wikiSuggestions.length) % wikiSuggestions.length); } 
+          else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectWikiSuggestion(wikiSuggestions[wikiSuggestionIndex]); } 
+          else if (e.key === 'Escape') { setShowWikiSuggestions(false); e.stopPropagation(); }
           return;
       }
-
       if (showStackSuggestions) {
-          if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              setStackSuggestionIndex(prev => (prev + 1) % stackSuggestions.length);
-          } else if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              setStackSuggestionIndex(prev => (prev - 1 + stackSuggestions.length) % stackSuggestions.length);
-          } else if (e.key === 'Enter' || e.key === 'Tab') {
-              e.preventDefault();
-              selectStackSuggestion(stackSuggestions[stackSuggestionIndex]);
-          } else if (e.key === 'Escape') {
-              setShowStackSuggestions(false);
-              e.stopPropagation();
-          }
+          if (e.key === 'ArrowDown') { e.preventDefault(); setStackSuggestionIndex(prev => (prev + 1) % stackSuggestions.length); } 
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setStackSuggestionIndex(prev => (prev - 1 + stackSuggestions.length) % stackSuggestions.length); } 
+          else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectStackSuggestion(stackSuggestions[stackSuggestionIndex]); } 
+          else if (e.key === 'Escape') { setShowStackSuggestions(false); e.stopPropagation(); }
           return;
       }
-
       if (e.key === 'Escape' && !showDeleteConfirm) {
         onCancel();
       } else if (e.key === 'Escape' && showDeleteConfirm) {
           setShowDeleteConfirm(false);
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [body, onCancel, showWikiSuggestions, showStackSuggestions, wikiSuggestions, wikiSuggestionIndex, stackSuggestions, stackSuggestionIndex, isEditingBody, showDeleteConfirm]);
@@ -283,9 +243,7 @@ export const Editor: React.FC<EditorProps> = ({
   const getCaretCoordinates = (element: HTMLTextAreaElement, position: number) => {
     const div = document.createElement('div');
     const style = getComputedStyle(element);
-    Array.from(style).forEach((prop) => {
-        div.style.setProperty(prop, style.getPropertyValue(prop));
-    });
+    Array.from(style).forEach((prop) => { div.style.setProperty(prop, style.getPropertyValue(prop)); });
     div.style.position = 'absolute';
     div.style.visibility = 'hidden';
     div.style.whiteSpace = 'pre-wrap';
@@ -374,10 +332,8 @@ export const Editor: React.FC<EditorProps> = ({
   const handleViewModeClick = (e: React.MouseEvent<HTMLDivElement>) => {
       let offset = body.length;
       const selection = window.getSelection();
-
       if (selection && selection.rangeCount > 0 && readViewRef.current) {
           const range = selection.getRangeAt(0);
-          
           if (readViewRef.current.contains(range.startContainer)) {
                const preCaretRange = range.cloneRange();
                preCaretRange.selectNodeContents(readViewRef.current);
@@ -385,12 +341,9 @@ export const Editor: React.FC<EditorProps> = ({
                offset = preCaretRange.toString().length;
           }
       }
-      
-      // Save current scroll position
       if (containerRef.current) {
           savedScrollTop.current = containerRef.current.scrollTop;
       }
-
       setInitialCursorOffset(offset); 
       setIsEditingBody(true);
       isMouseDownRef.current = false; 
@@ -454,6 +407,17 @@ export const Editor: React.FC<EditorProps> = ({
 
       {/* Top Header Buttons */}
       <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+           {/* Move to Side Button (New) */}
+           {onMoveToSide && initialCard?.id && (
+             <button
+                onClick={() => onMoveToSide(initialCard.id)}
+                className="text-stone-300 hover:text-stone-500 p-2 rounded-full hover:bg-stone-100 transition-colors"
+                title="右側に移動して一覧に戻る"
+             >
+                <ArrowRightFromLine size={20} />
+             </button>
+           )}
+           
            {initialCard?.id && (
              <button 
                 onClick={handleDeleteClick}
@@ -476,6 +440,7 @@ export const Editor: React.FC<EditorProps> = ({
       </div>
 
       <div ref={containerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 pb-20">
+        {/* ... (Rest of Editor Content) ... */}
         {/* Type & Date Header */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
             <div className="flex gap-2">
@@ -642,7 +607,7 @@ export const Editor: React.FC<EditorProps> = ({
                     {backlinks.map(linkCard => (
                         <div 
                             key={linkCard.id}
-                            onClick={(e) => onNavigate(linkCard.title, e)}
+                            onClick={(e) => onNavigate(linkCard.title, e)} // Pass event
                             className="bg-stone-50 border border-stone-200 rounded p-3 cursor-pointer hover:bg-stone-100 transition-colors"
                         >
                             <div className="text-sm font-bold text-stone-700">{linkCard.title}</div>
