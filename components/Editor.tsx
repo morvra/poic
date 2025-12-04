@@ -52,8 +52,6 @@ export const Editor: React.FC<EditorProps> = ({
   const [completed, setCompleted] = useState(initialCard?.completed || false);
   
   // Edit Mode State for Body
-  // Logic: if initialCard exists AND has an ID, default to View Mode. 
-  // If it's undefined OR has no ID (phantom), default to Edit Mode.
   const [isEditingBody, setIsEditingBody] = useState(!initialCard || !initialCard.id); 
   const [initialCursorOffset, setInitialCursorOffset] = useState<number | null>(null);
   
@@ -90,14 +88,22 @@ export const Editor: React.FC<EditorProps> = ({
 
   // Focus Title on New Card (ONLY if no title provided e.g. phantom)
   useEffect(() => {
-      // If it's a new card (no id) AND has no title yet, focus title.
-      // If creating from link (phantom), title is set, so skip this.
       if ((!initialCard || (!initialCard.id && !initialCard.title)) && titleInputRef.current) {
           setTimeout(() => {
               titleInputRef.current?.focus();
           }, 50);
       }
   }, [initialCard]);
+
+  // Auto-resize textarea when body changes or editing mode starts
+  useEffect(() => {
+    if (isEditingBody && bodyRef.current) {
+      // Reset height to auto to correctly calculate scrollHeight for shrinking content
+      bodyRef.current.style.height = 'auto';
+      // Set height to scrollHeight
+      bodyRef.current.style.height = `${bodyRef.current.scrollHeight}px`;
+    }
+  }, [body, isEditingBody]);
 
   // Update state when initialCard changes
   useEffect(() => {
@@ -114,9 +120,6 @@ export const Editor: React.FC<EditorProps> = ({
           setCompleted(initialCard.completed || false);
           setShowDeleteConfirm(false);
           
-          // Only switch to view mode if we genuinely switched cards (ID changed from one valid ID to another).
-          // If we transitioned from undefined (new card) to a valid ID (saved card), keep editing mode.
-          // ALSO, if card has no ID (phantom), force Edit Mode.
           if (!initialCard.id) {
               setIsEditingBody(true);
           } else if (prevId !== undefined && prevId !== currentId) {
@@ -125,7 +128,7 @@ export const Editor: React.FC<EditorProps> = ({
       }
       
       prevCardIdRef.current = currentId;
-  }, [initialCard?.id, initialCard]); // Dependency on initialCard object needed for title check on phantom reuse?
+  }, [initialCard?.id, initialCard]);
 
   // Auto-save logic
   useEffect(() => {
@@ -166,14 +169,8 @@ export const Editor: React.FC<EditorProps> = ({
   // Focus textarea when switching to edit mode
   useEffect(() => {
       if (isEditingBody && bodyRef.current) {
-          // Logic: Focus body if:
-          // 1. It's a phantom card (new card with title from link)
-          // 2. We are switching to edit mode on an existing card (explicit user action)
-          // 3. User tabbed into it (document.activeElement check)
-          // We DO NOT want to focus body if it's a standard new card (no title), because title should be focused.
-          
           const isPhantom = !initialCard?.id && !!initialCard?.title;
-          const isExplicitEdit = !!initialCard?.id; // Existing card going to edit mode
+          const isExplicitEdit = !!initialCard?.id; 
           const isTabFocus = document.activeElement === readViewRef.current;
 
           if (isPhantom || isExplicitEdit || isTabFocus) {
@@ -258,6 +255,7 @@ export const Editor: React.FC<EditorProps> = ({
     const end = bodyRef.current.selectionEnd;
     const newBody = body.substring(0, start) + timestampStr + body.substring(end);
     setBody(newBody);
+    // Focus handled by useEffect or manual ref access, ensuring cursor placement
     setTimeout(() => {
         if(bodyRef.current) {
             bodyRef.current.selectionStart = bodyRef.current.selectionEnd = start + timestampStr.length;
@@ -374,7 +372,7 @@ export const Editor: React.FC<EditorProps> = ({
       
       setInitialCursorOffset(offset); 
       setIsEditingBody(true);
-      isMouseDownRef.current = false; // Reset
+      isMouseDownRef.current = false; 
   };
 
   const handleDeleteClick = () => {
@@ -549,7 +547,7 @@ export const Editor: React.FC<EditorProps> = ({
                 <>
                     <textarea
                         ref={bodyRef}
-                        className="w-full h-full min-h-[150px] resize-none border-none focus:outline-none bg-transparent text-[17px] font-sans leading-relaxed text-ink/90 placeholder-stone-300"
+                        className="w-full min-h-[150px] resize-none border-none focus:outline-none bg-transparent text-[17px] font-sans leading-relaxed text-ink/90 placeholder-stone-300 overflow-hidden"
                         placeholder="内容を入力... (Alt+T: タイムスタンプ, [[ : リンク)"
                         value={body}
                         onChange={handleBodyChange}
