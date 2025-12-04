@@ -29,7 +29,7 @@ import {
   Pin
 } from 'lucide-react';
 
-// ... (INITIAL_CARDS unchanged) ...
+// Enhanced initial data with 10 varied cards
 const INITIAL_CARDS: Card[] = [
   {
     id: '10',
@@ -43,7 +43,7 @@ const INITIAL_CARDS: Card[] = [
 ];
 
 export default function App() {
-  // ... (State declarations unchanged) ...
+  // --- State ---
   const [cards, setCards] = useState<Card[]>(() => {
     const saved = localStorage.getItem('poic-cards');
     return saved ? JSON.parse(saved) : INITIAL_CARDS;
@@ -54,7 +54,7 @@ export default function App() {
   const [activeStack, setActiveStack] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<CardType | null>(null);
   
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile Overlay
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(() => {
       const saved = localStorage.getItem('poic-sidebar-state');
       return saved !== null ? JSON.parse(saved) : true;
@@ -78,6 +78,146 @@ export default function App() {
   const [dateFormat, setDateFormat] = useState<string>(() => {
     return localStorage.getItem('poic-date-format') || 'YYYY/MM/DD HH:mm';
   });
+
+  // --- Memos (Ordered by dependency) ---
+
+  // 1. Identify the active card for the editor (Depends on State only)
+  const activeCardForEditor = useMemo(() => {
+    if (phantomCard) return phantomCard as Card; 
+    if (!editingCardId) return undefined;
+    const card = cards.find(c => c.id === editingCardId);
+    return card?.isDeleted ? undefined : card;
+  }, [editingCardId, cards, phantomCard]);
+
+  // 2. Backlinks for the active card (Depends on activeCardForEditor)
+  const activeCardBacklinks = useMemo(() => {
+      if (!activeCardForEditor) return [];
+      const title = activeCardForEditor.title;
+      if (!title) return [];
+      const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`\\[\\[${escapedTitle}\\]\\]`, 'i');
+      return cards.filter(c => !c.isDeleted && c.id !== activeCardForEditor.id && regex.test(c.body));
+  }, [activeCardForEditor, cards]);
+
+  // 3. Basic Lists (Depends on cards)
+  const allStacks = useMemo(() => {
+    const stackMap = new Map<string, number>();
+    cards.forEach(c => {
+        if (!c.isDeleted) {
+            c.stacks?.forEach(s => {
+                stackMap.set(s, (stackMap.get(s) || 0) + 1);
+            });
+        }
+    });
+    return Array.from(stackMap.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([name, count]) => ({ name, count }));
+  }, [cards]);
+  
+  const allTitles = useMemo(() => {
+      return Array.from(new Set(cards.filter(c => !c.isDeleted).map(c => c.title)));
+  }, [cards]);
+  
+  const commonStacks = useMemo(() => {
+      const stacks = new Set<string>();
+      cards.forEach(c => {
+          if (!c.isDeleted && selectedCardIds.has(c.id)) {
+              c.stacks?.forEach(s => stacks.add(s));
+          }
+      });
+      return Array.from(stacks).sort();
+  }, [cards, selectedCardIds]);
+
+  const stats: PoicStats = useMemo(() => ({
+    total: cards.filter(c => !c.isDeleted).length,
+    record: cards.filter(c => !c.isDeleted && c.type === CardType.Record).length,
+    discovery: cards.filter(c => !c.isDeleted && c.type === CardType.Discovery).length,
+    gtdActive: cards.filter(c => !c.isDeleted && c.type === CardType.GTD && !c.completed).length,
+    gtdTotal: cards.filter(c => !c.isDeleted && c.type === CardType.GTD).length,
+    reference: cards.filter(c => !c.isDeleted && c.type === CardType.Reference).length,
+  }), [cards]);
+
+  // 4. Filtered Cards (Depends on State and cards)
+  const filteredCards = useMemo(() => {
+    let result = cards.filter(c => !c.isDeleted);
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(c => 
+        c.title.toLowerCase().includes(q) || 
+        c.body.toLowerCase().includes(q) ||
+        c.stacks?.some(s => s.toLowerCase().includes(q))
+      );
+    }
+    if (viewMode === 'Stack' && activeStack) {
+      result = result.filter(c => c.stacks?.includes(activeStack));
+    } else if (viewMode === 'GTD') {
+      result = result.filter(c => c.type === CardType.GTD);
+    } else if (viewMode === 'Type' && activeType) {
+        result = result.filter(c => c.type === activeType);
+    }
+    
+    if (viewMode === 'GTD') {
+      result = [...result].sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return a.dueDate - b.dueDate;
+      });
+    } else {
+        result = [...result].sort((a, b) => b.createdAt - a.createdAt);
+    }
+    return result;
+  }, [cards, viewMode, activeStack, activeType, searchQuery]);
+
+  // 5. Pinned/Unpinned Split (Depends on filteredCards)
+  const { pinnedCards, unpinnedCards } = useMemo(() => {
+      const pinned: Card[] = [];
+      const unpinned: Card[] = [];
+
+      filteredCards.forEach(card => {
+          if (card.isPinned) {
+              pinned.push(card);
+          } else {
+              unpinned.push(card);
+          }
+      });
+
+      pinned.sort((a, b) => {
+          const timeA = typeof a.isPinned === 'number' ? a.isPinned : 0;
+          const timeB = typeof b.isPinned === 'number' ? b.isPinned : 0;
+          return timeA - timeB;
+      });
+
+      return { pinnedCards: pinned, unpinnedCards: unpinned };
+  }, [filteredCards]);
+
+  // 6. GTD Groups (Depends on unpinnedCards)
+  const gtdGroups = useMemo(() => {
+    if (viewMode !== 'GTD') return null;
+    const groups: Record<string, Card[]> = {
+      '期限切れ': [],
+      '今日': [],
+      '明日以降': [],
+      '期限なし': [],
+      '完了': []
+    };
+    unpinnedCards.forEach(card => {
+      if (card.completed) {
+        groups['完了'].push(card);
+        return;
+      }
+      if (!card.dueDate) {
+        groups['期限なし'].push(card);
+        return;
+      }
+      const label = getRelativeDateLabel(card.dueDate);
+      if (label === 'Overdue') groups['期限切れ'].push(card);
+      else if (label === 'Today') groups['今日'].push(card);
+      else if (label === 'Tomorrow') groups['明日以降'].push(card);
+      else groups['明日以降'].push(card);
+    });
+    return groups;
+  }, [unpinnedCards, viewMode]);
 
   // --- Effects ---
   useEffect(() => {
@@ -119,7 +259,7 @@ export default function App() {
       }
   };
 
-  // --- Dropbox Helpers ... (unchanged)
+  // --- Dropbox Helpers ---
   const syncDownload = async (token: string) => {
       setIsSyncing(true);
       try {
@@ -176,7 +316,7 @@ export default function App() {
       setDropboxToken(null);
   };
 
-  // ... (Keyboard shortcuts unchanged)
+  // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
         if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
@@ -192,7 +332,6 @@ export default function App() {
   // --- Actions ---
   const handleSaveCard = (cardData: Partial<Card>, shouldClose = true) => {
     if (cardData.id) {
-      // Update existing
       const oldCard = cards.find(c => c.id === cardData.id);
       const titleChanged = oldCard && cardData.title && oldCard.title !== cardData.title;
       
@@ -207,7 +346,7 @@ export default function App() {
           const newLink = `[[${cardData.title}]]`;
           
           updatedCards = updatedCards.map(c => {
-              if (c.id === cardData.id) return c; // Skip self
+              if (c.id === cardData.id) return c; 
               if (c.body.match(oldTitleRegex)) {
                   return {
                       ...c,
@@ -218,11 +357,8 @@ export default function App() {
               return c;
           });
       }
-
       setCards(updatedCards);
-
     } else {
-      // Create new
       const newId = generateId();
       const newCard: Card = {
         id: newId,
@@ -235,7 +371,7 @@ export default function App() {
         completed: false,
         stacks: cardData.stacks || [],
         isDeleted: false,
-        isPinned: cardData.isPinned || false // Use value passed from Editor, default to false
+        isPinned: cardData.isPinned || false
       };
       setCards([newCard, ...cards]); 
       
@@ -514,103 +650,6 @@ ${opmlBody}
     });
   };
 
-  const allStacks = useMemo(() => {
-    const stackMap = new Map<string, number>();
-    cards.forEach(c => {
-        if (!c.isDeleted) {
-            c.stacks?.forEach(s => {
-                stackMap.set(s, (stackMap.get(s) || 0) + 1);
-            });
-        }
-    });
-    return Array.from(stackMap.entries())
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([name, count]) => ({ name, count }));
-  }, [cards]);
-  
-  const allTitles = useMemo(() => {
-      return Array.from(new Set(cards.filter(c => !c.isDeleted).map(c => c.title)));
-  }, [cards]);
-  
-  const commonStacks = useMemo(() => {
-      const stacks = new Set<string>();
-      cards.forEach(c => {
-          if (!c.isDeleted && selectedCardIds.has(c.id)) {
-              c.stacks?.forEach(s => stacks.add(s));
-          }
-      });
-      return Array.from(stacks).sort();
-  }, [cards, selectedCardIds]);
-
-  const stats: PoicStats = useMemo(() => ({
-    total: cards.filter(c => !c.isDeleted).length,
-    record: cards.filter(c => !c.isDeleted && c.type === CardType.Record).length,
-    discovery: cards.filter(c => !c.isDeleted && c.type === CardType.Discovery).length,
-    gtdActive: cards.filter(c => !c.isDeleted && c.type === CardType.GTD && !c.completed).length,
-    gtdTotal: cards.filter(c => !c.isDeleted && c.type === CardType.GTD).length,
-    reference: cards.filter(c => !c.isDeleted && c.type === CardType.Reference).length,
-  }), [cards]);
-
-  const filteredCards = useMemo(() => {
-    let result = cards.filter(c => !c.isDeleted);
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(c => 
-        c.title.toLowerCase().includes(q) || 
-        c.body.toLowerCase().includes(q) ||
-        c.stacks?.some(s => s.toLowerCase().includes(q))
-      );
-    }
-    if (viewMode === 'Stack' && activeStack) {
-      result = result.filter(c => c.stacks?.includes(activeStack));
-    } else if (viewMode === 'GTD') {
-      result = result.filter(c => c.type === CardType.GTD);
-    } else if (viewMode === 'Type' && activeType) {
-        result = result.filter(c => c.type === activeType);
-    }
-    
-    if (viewMode === 'GTD') {
-      result = [...result].sort((a, b) => {
-        if (a.completed !== b.completed) return a.completed ? 1 : -1;
-        if (!a.dueDate) return 1;
-        if (!b.dueDate) return -1;
-        return a.dueDate - b.dueDate;
-      });
-    } else {
-        result = [...result].sort((a, b) => b.createdAt - a.createdAt);
-    }
-    return result;
-  }, [cards, viewMode, activeStack, activeType, searchQuery]);
-
-  // Split filtered cards into pinned and unpinned
-  const { pinnedCards, unpinnedCards } = useMemo(() => {
-      const pinned: Card[] = [];
-      const unpinned: Card[] = [];
-
-      filteredCards.forEach(card => {
-          if (card.isPinned) {
-              pinned.push(card);
-          } else {
-              unpinned.push(card);
-          }
-      });
-
-      // Sort pinned cards: Oldest pin first
-      pinned.sort((a, b) => {
-          const timeA = typeof a.isPinned === 'number' ? a.isPinned : 0;
-          const timeB = typeof b.isPinned === 'number' ? b.isPinned : 0;
-          return timeA - timeB;
-      });
-
-      return { pinnedCards: pinned, unpinnedCards: unpinned };
-  }, [filteredCards]);
-
-  // ... (activeCardForEditor, activeCardBacklinks, gtdGroups, gridClasses, handleSelectAll unchanged) ...
-  // Repeated for context
-  const gridClasses = isDesktopSidebarOpen 
-    ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-    : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4";
-
   const handleSelectAll = () => {
       const allIds = filteredCards.map(c => c.id);
       const allSelected = allIds.every(id => selectedCardIds.has(id));
@@ -626,9 +665,13 @@ ${opmlBody}
       }
   };
 
+  // Determine grid columns based on desktop sidebar state
+  const gridClasses = isDesktopSidebarOpen 
+    ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+    : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4";
+
   return (
     <div className="h-screen flex font-sans text-ink bg-stone-200 overflow-hidden">
-      {/* ... (Render logic unchanged, uses updated components) ... */}
       
       {/* Mobile Overlay */}
       {isSidebarOpen && (
@@ -645,11 +688,10 @@ ${opmlBody}
         onDateFormatChange={handleDateFormatChange}
       />
 
-      {/* ... Batch Modals ... */}
+      {/* ... (Modal overlays) ... */}
       {showBatchTagModal && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]">
               <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200">
-                  {/* ... */}
                   <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2">
                       <Tag size={20} />
                       タグの管理
@@ -718,7 +760,7 @@ ${opmlBody}
         </div>
       )}
 
-      {/* Sidebar ... */}
+      {/* Sidebar */}
       <aside className={`
           fixed top-0 bottom-0 left-0 w-64 bg-paper-dark border-r border-stone-300 flex flex-col z-50
           transition-all duration-300 ease-in-out shadow-2xl md:shadow-none
@@ -726,7 +768,7 @@ ${opmlBody}
           md:relative md:translate-x-0
           ${isDesktopSidebarOpen ? 'md:w-64' : 'md:w-0 md:border-r-0 md:overflow-hidden'}
       `}>
-        {/* ... */}
+        {/* ... Sidebar content ... */}
         <div className="w-64 flex flex-col h-full">
             <div className="p-6 border-b border-stone-200/50 flex justify-between items-center">
                 <div>
@@ -737,7 +779,7 @@ ${opmlBody}
                     <X size={20} />
                 </button>
             </div>
-            {/* ... Nav Content ... */}
+
             <nav className="flex-1 overflow-y-auto p-4 space-y-6">
                 <div className="space-y-1">
                     <button onClick={() => handleViewChange('All')} className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium transition-colors ${viewMode === 'All' ? 'bg-white shadow-sm text-stone-900 border border-stone-100' : 'text-stone-500 hover:text-stone-900'}`}>
@@ -751,24 +793,24 @@ ${opmlBody}
                 </div>
 
                 <div className="pt-4 border-t border-stone-200/50">
-                   <div className="grid grid-cols-2 gap-2 px-2">
-                      <button onClick={() => handleViewChange('Type', CardType.Record)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Record ? 'bg-blue-100 border-blue-300 shadow-inner' : 'bg-blue-50 border-blue-100 hover:bg-blue-100'}`}>
+                <div className="grid grid-cols-2 gap-2 px-2">
+                    <button onClick={() => handleViewChange('Type', CardType.Record)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Record ? 'bg-blue-100 border-blue-300 shadow-inner' : 'bg-blue-50 border-blue-100 hover:bg-blue-100'}`}>
                         <div className="text-xl font-bold text-blue-600">{stats.record}</div>
                         <div className="text-[10px] uppercase text-blue-400">Record</div>
-                      </button>
-                      <button onClick={() => handleViewChange('Type', CardType.Discovery)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Discovery ? 'bg-red-100 border-red-300 shadow-inner' : 'bg-red-50 border-red-100 hover:bg-red-100'}`}>
+                    </button>
+                    <button onClick={() => handleViewChange('Type', CardType.Discovery)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Discovery ? 'bg-red-100 border-red-300 shadow-inner' : 'bg-red-50 border-red-100 hover:bg-red-100'}`}>
                         <div className="text-xl font-bold text-red-600">{stats.discovery}</div>
                         <div className="text-[10px] uppercase text-red-400">Idea</div>
-                      </button>
-                      <button onClick={() => handleViewChange('Type', CardType.GTD)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.GTD ? 'bg-green-100 border-green-300 shadow-inner' : 'bg-green-50 border-green-100 hover:bg-green-100'}`}>
+                    </button>
+                    <button onClick={() => handleViewChange('Type', CardType.GTD)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.GTD ? 'bg-green-100 border-green-300 shadow-inner' : 'bg-green-50 border-green-100 hover:bg-green-100'}`}>
                         <div className="text-xl font-bold text-green-600">{stats.gtdTotal}</div>
                         <div className="text-[10px] uppercase text-green-400">GTD</div>
-                      </button>
-                      <button onClick={() => handleViewChange('Type', CardType.Reference)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Reference ? 'bg-yellow-100 border-yellow-300 shadow-inner' : 'bg-yellow-50 border-yellow-100 hover:bg-yellow-100'}`}>
+                    </button>
+                    <button onClick={() => handleViewChange('Type', CardType.Reference)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Reference ? 'bg-yellow-100 border-yellow-300 shadow-inner' : 'bg-yellow-50 border-yellow-100 hover:bg-yellow-100'}`}>
                         <div className="text-xl font-bold text-yellow-600">{stats.reference}</div>
                         <div className="text-[10px] uppercase text-yellow-400">Ref</div>
-                      </button>
-                   </div>
+                    </button>
+                </div>
                 </div>
 
                 <div className="pt-2 border-t border-stone-200/50">
@@ -838,7 +880,7 @@ ${opmlBody}
       <main className="flex-1 overflow-y-auto bg-stone-200">
         {/* Sticky Header... */}
         <header className="sticky top-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 mb-4 border-b border-stone-300/30">
-             {/* ... Header Content ... */}
+            {/* ... Header Content ... */}
             <div className="flex items-center gap-3 flex-1">
                 <button 
                     onClick={toggleSidebar} 
@@ -886,6 +928,7 @@ ${opmlBody}
 
         {/* Scrollable Feed Content */}
         <div className="px-2 sm:px-6 w-full max-w-[1920px] mx-auto pb-20">
+            {/* ... Feed Content ... */}
             <div className="mb-4 flex items-center justify-between pl-2 border-l-4 border-stone-400">
                 <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">
                     {viewMode === 'All' && (searchQuery ? `検索: "${searchQuery}"` : 'Dock (全カード)')}
