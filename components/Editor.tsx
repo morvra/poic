@@ -477,7 +477,6 @@ export const Editor: React.FC<EditorProps> = ({
                     title={t}
                 >
                     <TypeIcon type={t} />
-                    {/* Removed text label as requested */}
                 </button>
                 ))}
             </div>
