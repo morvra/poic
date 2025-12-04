@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+// ... (Imports)
 import { Card, CardType, ViewMode, PoicStats } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern } from './utils';
-import { getAuthUrl, parseTokenFromUrl, uploadToDropbox, downloadFromDropbox } from './utils/dropbox'; 
+// Updated Imports from dropbox utils
+import { initiateAuth, handleAuthCallback, uploadToDropbox, downloadFromDropbox, isAuthenticated, logout } from './utils/dropbox'; 
 import { CardItem } from './components/CardItem';
 import { Editor } from './components/Editor';
 import { SettingsModal } from './components/SettingsModal'; 
@@ -29,68 +31,49 @@ import {
   Pin
 } from 'lucide-react';
 
-// Enhanced initial data with 10 varied cards
-const INITIAL_CARDS: Card[] = [
-  {
-    id: '10',
-    type: CardType.Record,
-    title: '朝の振り返り',
-    body: '雨が窓を優しく叩いている。\n\n> 08:30 コーディングには最適な天気だ。\n\n今日はスタッキングアニメーションの実装に集中しよう。',
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    stacks: ['Journal']
-  },
-  // ... (Keep existing initial cards or load from storage)
-];
+// ... (INITIAL_CARDS unchanged)
 
 export default function App() {
-  // --- State ---
+  // ... (State definitions unchanged)
   const [cards, setCards] = useState<Card[]>(() => {
     const saved = localStorage.getItem('poic-cards');
     return saved ? JSON.parse(saved) : INITIAL_CARDS;
   });
   
+  // ... (Other states unchanged)
   const [viewMode, setViewMode] = useState<ViewMode>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeStack, setActiveStack] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<CardType | null>(null);
   
-  // Sidebar State
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile Overlay
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(() => {
-      // Load desktop sidebar state from localStorage
       const saved = localStorage.getItem('poic-sidebar-state');
       return saved !== null ? JSON.parse(saved) : true;
   });
   
-  // Selection Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
   
-  // Batch Tagging State
   const [showBatchTagModal, setShowBatchTagModal] = useState(false);
   const [batchTagInput, setBatchTagInput] = useState('');
 
-  // Modal State
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [phantomCard, setPhantomCard] = useState<Partial<Card> | null>(null);
 
-  // Dropbox State
-  const [dropboxToken, setDropboxToken] = useState<string | null>(localStorage.getItem('dropbox_token'));
+  // Dropbox State - Just track if logged in for UI
+  const [isDropboxConnected, setIsDropboxConnected] = useState(isAuthenticated());
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [dateFormat, setDateFormat] = useState<string>(() => {
-    // Default now includes ddd for Day of Week
     return localStorage.getItem('poic-date-format') || 'YYYY/MM/DD ddd HH:mm';
   });
 
-  // --- Memos (Ordered by dependency) ---
-
-  // 1. Identify the active card for the editor (Depends on State only)
+  // ... (Memos unchanged)
+  // 1. Identify active card
   const activeCardForEditor = useMemo(() => {
     if (phantomCard) return phantomCard as Card; 
     if (!editingCardId) return undefined;
@@ -98,7 +81,7 @@ export default function App() {
     return card?.isDeleted ? undefined : card;
   }, [editingCardId, cards, phantomCard]);
 
-  // 2. Backlinks for the active card (Depends on activeCardForEditor)
+  // 2. Backlinks
   const activeCardBacklinks = useMemo(() => {
       if (!activeCardForEditor) return [];
       const title = activeCardForEditor.title;
@@ -108,7 +91,7 @@ export default function App() {
       return cards.filter(c => !c.isDeleted && c.id !== activeCardForEditor.id && regex.test(c.body));
   }, [activeCardForEditor, cards]);
 
-  // 3. Basic Lists (Depends on cards)
+  // 3. Basic Lists
   const allStacks = useMemo(() => {
     const stackMap = new Map<string, number>();
     cards.forEach(c => {
@@ -146,7 +129,7 @@ export default function App() {
     reference: cards.filter(c => !c.isDeleted && c.type === CardType.Reference).length,
   }), [cards]);
 
-  // 4. Filtered Cards (Depends on State and cards)
+  // 4. Filtered Cards
   const filteredCards = useMemo(() => {
     let result = cards.filter(c => !c.isDeleted);
     if (searchQuery) {
@@ -178,7 +161,7 @@ export default function App() {
     return result;
   }, [cards, viewMode, activeStack, activeType, searchQuery]);
 
-  // 5. Pinned/Unpinned Split (Depends on filteredCards)
+  // 5. Pinned/Unpinned
   const { pinnedCards, unpinnedCards } = useMemo(() => {
       const pinned: Card[] = [];
       const unpinned: Card[] = [];
@@ -200,7 +183,7 @@ export default function App() {
       return { pinnedCards: pinned, unpinnedCards: unpinned };
   }, [filteredCards]);
 
-  // 6. GTD Groups (Depends on unpinnedCards)
+  // 6. GTD Groups
   const gtdGroups = useMemo(() => {
     if (viewMode !== 'GTD') return null;
     const groups: Record<string, Card[]> = {
@@ -229,29 +212,47 @@ export default function App() {
   }, [unpinnedCards, viewMode]);
 
   // --- Effects ---
+  
+  // 1. Initial Load & Auth Check
   useEffect(() => {
-      const token = parseTokenFromUrl();
-      if (token) {
-          localStorage.setItem('dropbox_token', token);
-          setDropboxToken(token);
-          window.history.replaceState(null, '', window.location.pathname); 
-          syncDownload(token);
-      } else if (dropboxToken) {
-          syncDownload(dropboxToken);
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      
+      if (code) {
+          // Handle Auth Callback
+          setIsSyncing(true);
+          handleAuthCallback(code)
+            .then(() => {
+                setIsDropboxConnected(true);
+                window.history.replaceState(null, '', window.location.pathname); // Clean URL
+                return syncDownload();
+            })
+            .catch(err => {
+                console.error('Auth failed', err);
+                alert('Dropbox認証に失敗しました。');
+            })
+            .finally(() => setIsSyncing(false));
+      } else if (isAuthenticated()) {
+          // Already logged in, perform initial sync
+          syncDownload();
       }
   }, []);
 
+  // 2. Save Cards to LocalStorage
   useEffect(() => {
     localStorage.setItem('poic-cards', JSON.stringify(cards));
   }, [cards]);
 
+  // 3. Auto-Sync to Dropbox
   useEffect(() => {
-      if (!dropboxToken) return;
+      if (!isDropboxConnected) return;
+
       const timeoutId = setTimeout(() => {
-          syncUpload(dropboxToken, cards);
+          syncUpload(cards);
       }, 3000); 
+
       return () => clearTimeout(timeoutId);
-  }, [cards, dropboxToken]);
+  }, [cards, isDropboxConnected]);
 
   const handleDateFormatChange = (format: string) => {
     setDateFormat(format);
@@ -268,11 +269,13 @@ export default function App() {
       }
   };
 
-  // --- Dropbox Helpers ---
-  const syncDownload = async (token: string) => {
+  // --- Dropbox Helpers Wrappers ---
+  
+  const syncDownload = async () => {
+      if (!isDropboxConnected) return;
       setIsSyncing(true);
       try {
-          const remoteCards = await downloadFromDropbox(token);
+          const remoteCards = await downloadFromDropbox();
           if (remoteCards && Array.isArray(remoteCards)) {
               setCards(prevCards => {
                   const mergedMap = new Map<string, Card>();
@@ -288,7 +291,7 @@ export default function App() {
           }
       } catch (error) {
           console.error('Dropbox Sync Error:', error);
-          if (error instanceof Error && error.message.includes('401')) {
+          if (error instanceof Error && (error.message.includes('Unauthorized') || error.message.includes('401'))) {
               handleDisconnectDropbox();
           }
       } finally {
@@ -296,13 +299,14 @@ export default function App() {
       }
   };
 
-  const syncUpload = async (token: string, data: Card[]) => {
+  const syncUpload = async (data: Card[]) => {
+      if (!isDropboxConnected) return;
       setIsSyncing(true);
       try {
-          await uploadToDropbox(token, data);
+          await uploadToDropbox(data);
       } catch (error) {
           console.error('Dropbox Upload Error:', error);
-          if (error instanceof Error && error.message.includes('401')) {
+           if (error instanceof Error && (error.message.includes('Unauthorized') || error.message.includes('401'))) {
               handleDisconnectDropbox();
           }
       } finally {
@@ -311,20 +315,19 @@ export default function App() {
   };
 
   const handleManualSync = () => {
-      if (dropboxToken) {
-          syncDownload(dropboxToken);
-      }
+      syncDownload();
   };
 
   const handleConnectDropbox = () => {
-      window.location.href = getAuthUrl();
+      initiateAuth();
   };
 
   const handleDisconnectDropbox = () => {
-      localStorage.removeItem('dropbox_token');
-      setDropboxToken(null);
+      logout();
+      setIsDropboxConnected(false);
   };
 
+  // ... (Rest of the component functions are unchanged)
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -674,7 +677,6 @@ ${opmlBody}
       }
   };
 
-  // Determine grid columns based on desktop sidebar state
   const gridClasses = isDesktopSidebarOpen 
     ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
     : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4";
@@ -682,7 +684,6 @@ ${opmlBody}
   return (
     <div className="h-screen flex font-sans text-ink bg-stone-200 overflow-hidden">
       
-      {/* Mobile Overlay */}
       {isSidebarOpen && (
           <div 
             className="fixed inset-0 bg-black/20 z-40 md:hidden backdrop-blur-sm"
@@ -697,7 +698,7 @@ ${opmlBody}
         onDateFormatChange={handleDateFormatChange}
       />
 
-      {/* ... (Modal overlays) ... */}
+      {/* ... (Modal overlays rendering remains same) ... */}
       {showBatchTagModal && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]">
               <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200">
@@ -769,7 +770,6 @@ ${opmlBody}
         </div>
       )}
 
-      {/* Sidebar */}
       <aside className={`
           fixed top-0 bottom-0 left-0 w-64 bg-paper-dark border-r border-stone-300 flex flex-col z-50
           transition-all duration-300 ease-in-out shadow-2xl md:shadow-none
@@ -777,6 +777,7 @@ ${opmlBody}
           md:relative md:translate-x-0
           ${isDesktopSidebarOpen ? 'md:w-64' : 'md:w-0 md:border-r-0 md:overflow-hidden'}
       `}>
+        {/* Sidebar content ... (Unchanged) */}
         <div className="w-64 flex flex-col h-full">
             <div className="p-6 border-b border-stone-200/50 flex justify-between items-center">
                 <div>
@@ -840,7 +841,7 @@ ${opmlBody}
                     <h3 className="px-3 text-xs font-bold text-stone-400 uppercase tracking-wider mb-2 flex items-center gap-2 mt-4">
                         <Cloud size={12} /> Sync
                     </h3>
-                    {dropboxToken ? (
+                    {isDropboxConnected ? (
                         <div className="px-3 space-y-2">
                             <button 
                                 onClick={handleDisconnectDropbox}
@@ -884,9 +885,8 @@ ${opmlBody}
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto bg-stone-200">
-        {/* Sticky Header... */}
+        {/* Sticky Header ... (Unchanged) */}
         <header className="sticky top-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 mb-4 border-b border-stone-300/30">
              {/* ... Header Content ... */}
             <div className="flex items-center gap-3 flex-1">
@@ -911,7 +911,6 @@ ${opmlBody}
                 <button onClick={handleRandomCard} title="ランダムにカードを表示" className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"><Shuffle size={20} /></button>
                 <button onClick={handleToggleSelection} title={isSelectionMode ? "選択モードを終了" : "複数選択"} className={`p-2 rounded-full transition-colors ${isSelectionMode ? 'bg-stone-800 text-white' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'}`}><SelectIcon size={20} /></button>
                 
-                {/* Select All Button */}
                 {isSelectionMode && (
                     <button
                         onClick={handleSelectAll}
@@ -937,6 +936,7 @@ ${opmlBody}
 
         {/* Scrollable Feed Content */}
         <div className="px-2 sm:px-6 w-full max-w-[1920px] mx-auto pb-20">
+            {/* ... Feed header ... */}
             <div className="mb-4 flex items-center justify-between pl-2 border-l-4 border-stone-400">
                 <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">
                     {viewMode === 'All' && (searchQuery ? `検索: "${searchQuery}"` : 'Dock (全カード)')}
@@ -975,7 +975,6 @@ ${opmlBody}
                                 onSelect={handleSelectCard}
                             />
                         ))}
-                        {/* Divider between Pinned and Main */}
                         <div className="col-span-full h-4"></div> 
                     </>
                 )}
