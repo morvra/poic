@@ -17,15 +17,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const patterns = [
-    'YYYY/MM/DD HH:mm',
-    'YYYY-MM-DD HH:mm',
-    'MM/DD/YYYY HH:mm',
-    'DD/MM/YYYY HH:mm',
-    'YYYY/MM/DD',
-    'HH:mm'
-  ];
-
   const now = new Date();
 
   return (
@@ -43,30 +34,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         <div className="mb-6">
           <label className="text-xs font-bold text-stone-400 uppercase block mb-3">タイムスタンプ形式 (Alt + T)</label>
-          <div className="space-y-2">
-            {patterns.map((pattern) => (
-              <label 
-                key={pattern}
-                className={`flex items-center gap-3 p-3 rounded-md border cursor-pointer transition-colors ${
-                  dateFormat === pattern 
-                    ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' 
-                    : 'bg-white border-stone-200 hover:bg-stone-50'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="dateFormat"
-                  value={pattern}
-                  checked={dateFormat === pattern}
-                  onChange={() => onDateFormatChange(pattern)}
-                  className="text-blue-600 focus:ring-blue-500 h-4 w-4"
-                />
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium text-stone-700">{pattern}</span>
-                  <span className="text-xs text-stone-400">例: {formatTimestampByPattern(now, pattern)}</span>
-                </div>
-              </label>
-            ))}
+          
+          <input
+            type="text"
+            value={dateFormat}
+            onChange={(e) => onDateFormatChange(e.target.value)}
+            className="w-full border border-stone-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 font-mono placeholder-stone-300"
+            placeholder="YYYY/MM/DD ddd HH:mm"
+          />
+
+          <div className="mt-3 bg-stone-50 p-2 rounded border border-stone-100">
+            <p className="text-xs text-stone-500 mb-1">プレビュー:</p>
+            <p className="text-sm font-mono font-bold text-stone-800">
+              {formatTimestampByPattern(now, dateFormat)}
+            </p>
+          </div>
+
+          <div className="mt-4">
+            <p className="text-[10px] font-bold text-stone-400 uppercase mb-2">使用可能なパターン</p>
+            <ul className="text-xs text-stone-500 space-y-1 font-mono">
+              <li><span className="font-bold text-stone-700">YYYY</span> : 年 (2024)</li>
+              <li><span className="font-bold text-stone-700">MM</span> &nbsp; : 月 (01-12)</li>
+              <li><span className="font-bold text-stone-700">DD</span> &nbsp; : 日 (01-31)</li>
+              <li><span className="font-bold text-stone-700">ddd</span> : 曜日 (Sun-Sat)</li>
+              <li><span className="font-bold text-stone-700">HH</span> &nbsp; : 時 (00-23)</li>
+              <li><span className="font-bold text-stone-700">mm</span> &nbsp; : 分 (00-59)</li>
+            </ul>
           </div>
         </div>
 

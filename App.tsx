@@ -40,6 +40,7 @@ const INITIAL_CARDS: Card[] = [
     updatedAt: Date.now(),
     stacks: ['Journal']
   },
+  // ... (Keep existing initial cards or load from storage)
 ];
 
 export default function App() {
@@ -54,29 +55,37 @@ export default function App() {
   const [activeStack, setActiveStack] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<CardType | null>(null);
   
+  // Sidebar State
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile Overlay
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(() => {
+      // Load desktop sidebar state from localStorage
       const saved = localStorage.getItem('poic-sidebar-state');
       return saved !== null ? JSON.parse(saved) : true;
   });
   
+  // Selection Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
   
+  // Batch Tagging State
   const [showBatchTagModal, setShowBatchTagModal] = useState(false);
   const [batchTagInput, setBatchTagInput] = useState('');
 
+  // Modal State
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [phantomCard, setPhantomCard] = useState<Partial<Card> | null>(null);
 
+  // Dropbox State
   const [dropboxToken, setDropboxToken] = useState<string | null>(localStorage.getItem('dropbox_token'));
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [dateFormat, setDateFormat] = useState<string>(() => {
-    return localStorage.getItem('poic-date-format') || 'YYYY/MM/DD HH:mm';
+    // Default now includes ddd for Day of Week
+    return localStorage.getItem('poic-date-format') || 'YYYY/MM/DD ddd HH:mm';
   });
 
   // --- Memos (Ordered by dependency) ---
@@ -768,7 +777,6 @@ ${opmlBody}
           md:relative md:translate-x-0
           ${isDesktopSidebarOpen ? 'md:w-64' : 'md:w-0 md:border-r-0 md:overflow-hidden'}
       `}>
-        {/* ... Sidebar content ... */}
         <div className="w-64 flex flex-col h-full">
             <div className="p-6 border-b border-stone-200/50 flex justify-between items-center">
                 <div>
@@ -796,11 +804,11 @@ ${opmlBody}
                 <div className="grid grid-cols-2 gap-2 px-2">
                     <button onClick={() => handleViewChange('Type', CardType.Record)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Record ? 'bg-blue-100 border-blue-300 shadow-inner' : 'bg-blue-50 border-blue-100 hover:bg-blue-100'}`}>
                         <div className="text-xl font-bold text-blue-600">{stats.record}</div>
-                        <div className="text-[10px] uppercase text-blue-400">Record</div>
+                        <div className="text-[10px] uppercase text-blue-400">RECORD</div>
                     </button>
                     <button onClick={() => handleViewChange('Type', CardType.Discovery)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Discovery ? 'bg-red-100 border-red-300 shadow-inner' : 'bg-red-50 border-red-100 hover:bg-red-100'}`}>
                         <div className="text-xl font-bold text-red-600">{stats.discovery}</div>
-                        <div className="text-[10px] uppercase text-red-400">Idea</div>
+                        <div className="text-[10px] uppercase text-red-400">DISCOVERY</div>
                     </button>
                     <button onClick={() => handleViewChange('Type', CardType.GTD)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.GTD ? 'bg-green-100 border-green-300 shadow-inner' : 'bg-green-50 border-green-100 hover:bg-green-100'}`}>
                         <div className="text-xl font-bold text-green-600">{stats.gtdTotal}</div>
@@ -808,7 +816,7 @@ ${opmlBody}
                     </button>
                     <button onClick={() => handleViewChange('Type', CardType.Reference)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Reference ? 'bg-yellow-100 border-yellow-300 shadow-inner' : 'bg-yellow-50 border-yellow-100 hover:bg-yellow-100'}`}>
                         <div className="text-xl font-bold text-yellow-600">{stats.reference}</div>
-                        <div className="text-[10px] uppercase text-yellow-400">Ref</div>
+                        <div className="text-[10px] uppercase text-yellow-400">REFERENCE</div>
                     </button>
                 </div>
                 </div>
@@ -880,7 +888,7 @@ ${opmlBody}
       <main className="flex-1 overflow-y-auto bg-stone-200">
         {/* Sticky Header... */}
         <header className="sticky top-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 mb-4 border-b border-stone-300/30">
-            {/* ... Header Content ... */}
+             {/* ... Header Content ... */}
             <div className="flex items-center gap-3 flex-1">
                 <button 
                     onClick={toggleSidebar} 
@@ -903,6 +911,7 @@ ${opmlBody}
                 <button onClick={handleRandomCard} title="ランダムにカードを表示" className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"><Shuffle size={20} /></button>
                 <button onClick={handleToggleSelection} title={isSelectionMode ? "選択モードを終了" : "複数選択"} className={`p-2 rounded-full transition-colors ${isSelectionMode ? 'bg-stone-800 text-white' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'}`}><SelectIcon size={20} /></button>
                 
+                {/* Select All Button */}
                 {isSelectionMode && (
                     <button
                         onClick={handleSelectAll}
@@ -928,7 +937,6 @@ ${opmlBody}
 
         {/* Scrollable Feed Content */}
         <div className="px-2 sm:px-6 w-full max-w-[1920px] mx-auto pb-20">
-            {/* ... Feed Content ... */}
             <div className="mb-4 flex items-center justify-between pl-2 border-l-4 border-stone-400">
                 <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">
                     {viewMode === 'All' && (searchQuery ? `検索: "${searchQuery}"` : 'Dock (全カード)')}
@@ -967,6 +975,7 @@ ${opmlBody}
                                 onSelect={handleSelectCard}
                             />
                         ))}
+                        {/* Divider between Pinned and Main */}
                         <div className="col-span-full h-4"></div> 
                     </>
                 )}
