@@ -66,6 +66,7 @@ export const Editor: React.FC<EditorProps> = ({
   const stackInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMouseDownRef = useRef(false); // Track mouse state to distinguish click vs tab focus
+  const savedScrollTop = useRef<number | null>(null); // To restore scroll position after switching mode
   
   // Ref to track previous ID for detecting card switches vs auto-save updates
   const prevCardIdRef = useRef<string | undefined>(initialCard?.id);
@@ -96,12 +97,10 @@ export const Editor: React.FC<EditorProps> = ({
       }
   }, [initialCard]);
 
-  // Auto-resize textarea when body changes or editing mode starts
+  // Auto-resize textarea when body changes
   useEffect(() => {
     if (isEditingBody && bodyRef.current) {
-      // Reset height to auto to correctly calculate scrollHeight for shrinking content
       bodyRef.current.style.height = 'auto';
-      // Set height to scrollHeight
       bodyRef.current.style.height = `${bodyRef.current.scrollHeight}px`;
     }
   }, [body, isEditingBody]);
@@ -174,9 +173,13 @@ export const Editor: React.FC<EditorProps> = ({
       setIsPinned(newState);
   };
 
-  // Focus textarea when switching to edit mode
+  // Focus textarea and restore scroll when switching to edit mode
   useEffect(() => {
       if (isEditingBody && bodyRef.current) {
+          // Ensure height is correct before restoring scroll
+          bodyRef.current.style.height = 'auto';
+          bodyRef.current.style.height = `${bodyRef.current.scrollHeight}px`;
+
           const isPhantom = !initialCard?.id && !!initialCard?.title;
           const isExplicitEdit = !!initialCard?.id; 
           const isTabFocus = document.activeElement === readViewRef.current;
@@ -190,6 +193,12 @@ export const Editor: React.FC<EditorProps> = ({
               const pos = Math.min(Math.max(0, initialCursorOffset), len);
               bodyRef.current.setSelectionRange(pos, pos);
               setInitialCursorOffset(null);
+          }
+
+          // Restore scroll position if saved
+          if (savedScrollTop.current !== null && containerRef.current) {
+              containerRef.current.scrollTop = savedScrollTop.current;
+              savedScrollTop.current = null;
           }
       }
   }, [isEditingBody]); 
@@ -377,6 +386,11 @@ export const Editor: React.FC<EditorProps> = ({
           }
       }
       
+      // Save current scroll position
+      if (containerRef.current) {
+          savedScrollTop.current = containerRef.current.scrollTop;
+      }
+
       setInitialCursorOffset(offset); 
       setIsEditingBody(true);
       isMouseDownRef.current = false; 
