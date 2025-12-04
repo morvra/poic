@@ -6,8 +6,8 @@ import { Clock, CheckCircle, Circle, FileText, Lightbulb, CheckSquare, BookOpen,
 
 interface CardItemProps {
   card: Card;
-  dateFormat: string; 
-  onClick: (card: Card, e: React.MouseEvent) => void; // Update signature to include event
+  dateFormat: string; // Receive dateFormat
+  onClick: (card: Card) => void;
   onLinkClick: (term: string) => void;
   onToggleComplete?: (id: string) => void;
   onStackClick?: (stack: string) => void;
@@ -15,6 +15,7 @@ interface CardItemProps {
   style?: React.CSSProperties;
   domId?: string; 
   
+  // Selection props
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onSelect?: (id: string) => void;
@@ -63,8 +64,7 @@ export const CardItem: React.FC<CardItemProps> = ({
       e.preventDefault();
       onSelect(card.id);
     } else {
-      // Pass the event object to the onClick handler
-      onClick(card, e);
+      onClick(card);
     }
   };
 
@@ -97,7 +97,7 @@ export const CardItem: React.FC<CardItemProps> = ({
                     <span className="hidden sm:inline">{SHORT_TYPE_NAMES[card.type]}</span>
                 </div>
                 
-                {/* Pin Icon */}
+                {/* Pin Icon - Only show if already pinned (to allow unpinning) */}
                 {onTogglePin && !isSelectionMode && card.isPinned && (
                     <button
                         onClick={(e) => { e.stopPropagation(); onTogglePin(card.id); }}
@@ -131,6 +131,7 @@ export const CardItem: React.FC<CardItemProps> = ({
         <div className="flex flex-wrap items-center gap-3 text-[13px] text-stone-400 font-mono mb-2 leading-none">
              <span className="flex items-center gap-1">
                 <Clock size={12} />
+                {/* Use configurable date format with Day of Week */}
                 {formatTimestampByPattern(new Date(card.createdAt), dateFormat)}
              </span>
              {isGTD && card.dueDate && (
@@ -153,7 +154,7 @@ export const CardItem: React.FC<CardItemProps> = ({
              )}
         </div>
 
-        {/* Body Preview */}
+        {/* Body Preview - Removed mt-auto to align top */}
         <div className="relative">
              <div className="line-clamp-3 font-sans text-sm text-ink/90 leading-relaxed">
                 <CardRenderer content={card.body} onLinkClick={onLinkClick} />

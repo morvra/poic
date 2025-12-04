@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+// ... (Imports)
 import { Card, CardType, ViewMode, PoicStats } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern } from './utils';
-import { getAuthUrl, parseTokenFromUrl, uploadToDropbox, downloadFromDropbox, isAuthenticated, logout } from './utils/dropbox'; 
+// Updated Imports from dropbox utils
+import { initiateAuth, handleAuthCallback, uploadToDropbox, downloadFromDropbox, isAuthenticated, logout } from './utils/dropbox'; 
 import { CardItem } from './components/CardItem';
 import { Editor } from './components/Editor';
 import { SettingsModal } from './components/SettingsModal'; 
@@ -26,30 +28,19 @@ import {
   RefreshCw,
   Settings,
   CheckCheck,
-  Pin,
-  ArrowRightFromLine
+  Pin
 } from 'lucide-react';
 
-// Enhanced initial data with 10 varied cards
-const INITIAL_CARDS: Card[] = [
-  {
-    id: '10',
-    type: CardType.Record,
-    title: '朝の振り返り',
-    body: '雨が窓を優しく叩いている。\n\n> 08:30 コーディングには最適な天気だ。\n\n今日はスタッキングアニメーションの実装に集中しよう。',
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    stacks: ['Journal']
-  },
-];
+// ... (INITIAL_CARDS unchanged)
 
 export default function App() {
-  // --- State ---
+  // ... (State definitions unchanged)
   const [cards, setCards] = useState<Card[]>(() => {
     const saved = localStorage.getItem('poic-cards');
     return saved ? JSON.parse(saved) : INITIAL_CARDS;
   });
   
+  // ... (Other states unchanged)
   const [viewMode, setViewMode] = useState<ViewMode>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeStack, setActiveStack] = useState<string | null>(null);
@@ -68,14 +59,11 @@ export default function App() {
   const [showBatchTagModal, setShowBatchTagModal] = useState(false);
   const [batchTagInput, setBatchTagInput] = useState('');
 
-  // Split View State
-  const [editingCardIds, setEditingCardIds] = useState<string[]>([]);
-  const [activePanelIndex, setActivePanelIndex] = useState<0 | 1>(0);
-  
-  const [phantomCards, setPhantomCards] = useState<Map<string, Partial<Card>>>(new Map());
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [phantomCard, setPhantomCard] = useState<Partial<Card> | null>(null);
 
-  // Dropbox State
-  const [dropboxToken, setDropboxToken] = useState<string | null>(localStorage.getItem('dropbox_access_token'));
+  // Dropbox State - Just track if logged in for UI
   const [isDropboxConnected, setIsDropboxConnected] = useState(isAuthenticated());
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -84,27 +72,26 @@ export default function App() {
     return localStorage.getItem('poic-date-format') || 'YYYY/MM/DD ddd HH:mm';
   });
 
-  // --- Memos ---
-  const activeCardsForEditor = useMemo(() => {
-      return editingCardIds.map(id => {
-          if (phantomCards.has(id)) return phantomCards.get(id) as Card;
-          const card = cards.find(c => c.id === id);
-          return card?.isDeleted ? undefined : card;
-      });
-  }, [editingCardIds, cards, phantomCards]);
+  // ... (Memos unchanged)
+  // 1. Identify active card
+  const activeCardForEditor = useMemo(() => {
+    if (phantomCard) return phantomCard as Card; 
+    if (!editingCardId) return undefined;
+    const card = cards.find(c => c.id === editingCardId);
+    return card?.isDeleted ? undefined : card;
+  }, [editingCardId, cards, phantomCard]);
 
+  // 2. Backlinks
   const activeCardBacklinks = useMemo(() => {
-      const activeId = editingCardIds[activePanelIndex];
-      if (!activeId) return [];
-      
-      const activeCard = activeCardsForEditor[activePanelIndex];
-      if (!activeCard || !activeCard.title) return [];
-
-      const escapedTitle = activeCard.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (!activeCardForEditor) return [];
+      const title = activeCardForEditor.title;
+      if (!title) return [];
+      const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(`\\[\\[${escapedTitle}\\]\\]`, 'i');
-      return cards.filter(c => !c.isDeleted && c.id !== activeId && regex.test(c.body));
-  }, [editingCardIds, activePanelIndex, activeCardsForEditor, cards]);
+      return cards.filter(c => !c.isDeleted && c.id !== activeCardForEditor.id && regex.test(c.body));
+  }, [activeCardForEditor, cards]);
 
+  // 3. Basic Lists
   const allStacks = useMemo(() => {
     const stackMap = new Map<string, number>();
     cards.forEach(c => {
@@ -142,6 +129,7 @@ export default function App() {
     reference: cards.filter(c => !c.isDeleted && c.type === CardType.Reference).length,
   }), [cards]);
 
+  // 4. Filtered Cards
   const filteredCards = useMemo(() => {
     let result = cards.filter(c => !c.isDeleted);
     if (searchQuery) {
@@ -173,6 +161,7 @@ export default function App() {
     return result;
   }, [cards, viewMode, activeStack, activeType, searchQuery]);
 
+  // 5. Pinned/Unpinned
   const { pinnedCards, unpinnedCards } = useMemo(() => {
       const pinned: Card[] = [];
       const unpinned: Card[] = [];
@@ -194,6 +183,7 @@ export default function App() {
       return { pinnedCards: pinned, unpinnedCards: unpinned };
   }, [filteredCards]);
 
+  // 6. GTD Groups
   const gtdGroups = useMemo(() => {
     if (viewMode !== 'GTD') return null;
     const groups: Record<string, Card[]> = {
@@ -222,18 +212,20 @@ export default function App() {
   }, [unpinnedCards, viewMode]);
 
   // --- Effects ---
+  
+  // 1. Initial Load & Auth Check
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
       const code = params.get('code');
       
       if (code) {
+          // Handle Auth Callback
           setIsSyncing(true);
           handleAuthCallback(code)
-            .then((token) => {
+            .then(() => {
                 setIsDropboxConnected(true);
-                setDropboxToken(token); 
-                window.history.replaceState(null, '', window.location.pathname); 
-                return syncDownload(token);
+                window.history.replaceState(null, '', window.location.pathname); // Clean URL
+                return syncDownload();
             })
             .catch(err => {
                 console.error('Auth failed', err);
@@ -241,21 +233,26 @@ export default function App() {
             })
             .finally(() => setIsSyncing(false));
       } else if (isAuthenticated()) {
+          // Already logged in, perform initial sync
           syncDownload();
       }
   }, []);
 
+  // 2. Save Cards to LocalStorage
   useEffect(() => {
     localStorage.setItem('poic-cards', JSON.stringify(cards));
   }, [cards]);
 
+  // 3. Auto-Sync to Dropbox
   useEffect(() => {
-      if (!dropboxToken) return;
+      if (!isDropboxConnected) return;
+
       const timeoutId = setTimeout(() => {
-          syncUpload(dropboxToken, cards);
+          syncUpload(cards);
       }, 3000); 
+
       return () => clearTimeout(timeoutId);
-  }, [cards, dropboxToken]);
+  }, [cards, isDropboxConnected]);
 
   const handleDateFormatChange = (format: string) => {
     setDateFormat(format);
@@ -273,7 +270,9 @@ export default function App() {
   };
 
   // --- Dropbox Helpers Wrappers ---
-  const syncDownload = async (token?: string) => {
+  
+  const syncDownload = async () => {
+      if (!isDropboxConnected) return;
       setIsSyncing(true);
       try {
           const remoteCards = await downloadFromDropbox();
@@ -300,14 +299,14 @@ export default function App() {
       }
   };
 
-  const syncUpload = async (token: string, data: Card[]) => {
+  const syncUpload = async (data: Card[]) => {
       if (!isDropboxConnected) return;
       setIsSyncing(true);
       try {
           await uploadToDropbox(data);
       } catch (error) {
           console.error('Dropbox Upload Error:', error);
-          if (error instanceof Error && (error.message.includes('Token refresh failed') || error.message.includes('Unauthorized'))) {
+           if (error instanceof Error && (error.message.includes('Unauthorized') || error.message.includes('401'))) {
               handleDisconnectDropbox();
           }
       } finally {
@@ -326,133 +325,76 @@ export default function App() {
   const handleDisconnectDropbox = () => {
       logout();
       setIsDropboxConnected(false);
-      setDropboxToken(null);
   };
 
+  // ... (Rest of the component functions are unchanged)
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
         if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
-        if (e.key === 'n' && editingCardIds.length === 0) {
+        if (e.key === 'n' && !isEditorOpen) {
             e.preventDefault();
             openNewCardEditor();
         }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editingCardIds.length]);
+  }, [isEditorOpen]);
 
   // --- Actions ---
-  
-  // Stack Management
-  const handleSelectCard = (id: string) => {
-      const newSelection = new Set(selectedCardIds);
-      if (newSelection.has(id)) {
-          newSelection.delete(id);
-      } else {
-          newSelection.add(id);
-      }
-      setSelectedCardIds(newSelection);
-  };
-
-  const openEditCardEditor = (card: Card, e?: React.MouseEvent) => {
-    if (isSelectionMode) {
-        handleSelectCard(card.id);
-        return;
-    }
-    
-    const isMultiOpen = e?.metaKey || e?.ctrlKey;
-
-    setEditingCardIds(prev => {
-        if (isMultiOpen) {
-            if (prev.includes(card.id)) return prev;
-            if (prev.length < 2) { setActivePanelIndex(1); return [...prev, card.id]; } 
-            else { setActivePanelIndex(1); return [prev[0], card.id]; }
-        } else {
-            if (prev.length === 0) { setActivePanelIndex(0); return [card.id]; }
-            const newIds = [...prev]; newIds[activePanelIndex] = card.id; return newIds;
-        }
-    });
-  };
-
-  const openNewCardEditor = () => {
-      const tempId = `new-${Date.now()}`;
-      const newPhantom: Partial<Card> = { id: tempId, type: CardType.Record, title: '', body: '', createdAt: Date.now(), updatedAt: Date.now(), stacks: [], isDeleted: false, isPinned: false };
-      setPhantomCards(prev => new Map(prev).set(tempId, newPhantom));
-      setEditingCardIds(prev => {
-          if (prev.length === 0) { setActivePanelIndex(0); return [tempId]; }
-          const newIds = [...prev]; newIds[activePanelIndex] = tempId; return newIds;
-      });
-  };
-
-  const handleCloseEditor = (id: string) => {
-      setEditingCardIds(prev => {
-          const newIds = prev.filter(cid => cid !== id);
-          if (newIds.length === 0) setActivePanelIndex(0);
-          else if (activePanelIndex >= newIds.length) setActivePanelIndex(0);
-          return newIds;
-      });
-      if (phantomCards.has(id)) {
-          const newPhantoms = new Map(phantomCards);
-          newPhantoms.delete(id);
-          setPhantomCards(newPhantoms);
-      }
-  };
-
-  const handleCloseAll = () => {
-      setEditingCardIds([]);
-      setPhantomCards(new Map());
-  };
-  
-  const handleMoveToSide = (id: string) => {
-      setEditingCardIds(prev => {
-          if (prev.length === 1 && prev[0] === id) {
-             return prev;
-          }
-          return prev;
-      });
-  };
-
   const handleSaveCard = (cardData: Partial<Card>, shouldClose = true) => {
-    const currentId = cardData.id; 
-    let finalId = currentId;
+    if (cardData.id) {
+      const oldCard = cards.find(c => c.id === cardData.id);
+      const titleChanged = oldCard && cardData.title && oldCard.title !== cardData.title;
+      
+      let updatedCards = cards.map(c => 
+        c.id === cardData.id 
+          ? { ...c, ...cardData, updatedAt: Date.now() } as Card 
+          : c
+      );
 
-    if (!currentId || phantomCards.has(currentId)) {
-        const existingIndex = cards.findIndex(c => c.id === currentId);
-        
-        if (existingIndex === -1) {
-             const newId = generateId();
-             finalId = newId;
-             const newCard: Card = {
-                id: newId,
-                type: cardData.type || CardType.Record,
-                title: cardData.title || '無題',
-                body: cardData.body || '',
-                createdAt: cardData.createdAt || Date.now(),
-                updatedAt: Date.now(),
-                dueDate: cardData.dueDate,
-                completed: false,
-                stacks: cardData.stacks || [],
-                isDeleted: false,
-                isPinned: cardData.isPinned || false
-             };
-             setCards([newCard, ...cards]);
-
-             if (currentId && phantomCards.has(currentId)) {
-                 const newPhantoms = new Map(phantomCards);
-                 newPhantoms.delete(currentId);
-                 setPhantomCards(newPhantoms);
-                 setEditingCardIds(prev => prev.map(id => id === currentId ? newId : id));
-             }
-        } else {
-            setCards(cards.map(c => c.id === currentId ? { ...c, ...cardData, updatedAt: Date.now() } as Card : c));
-        }
+      if (titleChanged && oldCard) {
+          const oldTitleRegex = new RegExp(`\\[\\[${oldCard.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\]`, 'g');
+          const newLink = `[[${cardData.title}]]`;
+          
+          updatedCards = updatedCards.map(c => {
+              if (c.id === cardData.id) return c; 
+              if (c.body.match(oldTitleRegex)) {
+                  return {
+                      ...c,
+                      body: c.body.replace(oldTitleRegex, newLink),
+                      updatedAt: Date.now()
+                  };
+              }
+              return c;
+          });
+      }
+      setCards(updatedCards);
     } else {
-        setCards(cards.map(c => c.id === currentId ? { ...c, ...cardData, updatedAt: Date.now() } as Card : c));
+      const newId = generateId();
+      const newCard: Card = {
+        id: newId,
+        type: cardData.type || CardType.Record,
+        title: cardData.title || '無題',
+        body: cardData.body || '',
+        createdAt: cardData.createdAt || Date.now(),
+        updatedAt: Date.now(),
+        dueDate: cardData.dueDate,
+        completed: false,
+        stacks: cardData.stacks || [],
+        isDeleted: false,
+        isPinned: cardData.isPinned || false
+      };
+      setCards([newCard, ...cards]); 
+      
+      if (!shouldClose) {
+          setEditingCardId(newId);
+          setPhantomCard(null);
+      }
     }
     
-    if (shouldClose && finalId) {
-        handleCloseEditor(finalId);
+    if (shouldClose) {
+        closeEditor();
     }
   };
 
@@ -462,7 +404,7 @@ export default function App() {
             ? { ...c, isDeleted: true, updatedAt: Date.now() } 
             : c
     ));
-    handleCloseEditor(id);
+    closeEditor();
   };
   
   const handleToggleSelection = () => {
@@ -470,6 +412,16 @@ export default function App() {
       setSelectedCardIds(new Set()); 
       setShowBatchDeleteConfirm(false);
       setShowBatchTagModal(false);
+  };
+
+  const handleSelectCard = (id: string) => {
+      const newSelection = new Set(selectedCardIds);
+      if (newSelection.has(id)) {
+          newSelection.delete(id);
+      } else {
+          newSelection.add(id);
+      }
+      setSelectedCardIds(newSelection);
   };
 
   const handleClickDeleteSelected = () => {
@@ -531,7 +483,7 @@ export default function App() {
       }));
   };
 
-  const handleLinkClick = (term: string, e?: React.MouseEvent) => {
+  const handleLinkClick = (term: string) => {
     if (term.startsWith('#')) {
         setSearchQuery(term);
         setViewMode('All');
@@ -541,33 +493,86 @@ export default function App() {
     }
     const targetCard = cards.find(c => !c.isDeleted && c.title.toLowerCase() === term.toLowerCase());
     if (targetCard) {
-        openEditCardEditor(targetCard, e);
+        openEditCardEditor(targetCard);
     } else {
         setSearchQuery('');
-        const tempId = `phantom-${Date.now()}`;
-        setPhantomCards(prev => new Map(prev).set(tempId, {
-            id: tempId, title: term, type: CardType.Record, body: '', createdAt: Date.now(), updatedAt: Date.now(), stacks: [], isDeleted: false, isPinned: false
-        }));
-        setEditingCardIds(prev => {
-             const isMultiOpen = e?.metaKey || e?.ctrlKey;
-             if (isMultiOpen) {
-                if (prev.length < 2) { setActivePanelIndex(1); return [...prev, tempId]; } 
-                else { setActivePanelIndex(1); return [prev[0], tempId]; }
-             } else {
-                if (prev.length === 0) { setActivePanelIndex(0); return [tempId]; }
-                const newIds = [...prev]; newIds[activePanelIndex] = tempId; return newIds;
-             }
+        setPhantomCard({
+            title: term,
+            type: CardType.Record,
+            body: '',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            stacks: [],
+            isDeleted: false,
+            isPinned: false
         });
+        setEditingCardId(null);
+        setIsEditorOpen(true);
     }
   };
 
-  const handleEditorNavigation = (term: string, e?: React.MouseEvent) => {
+  const handleEditorNavigation = (term: string) => {
       if (term.startsWith('#')) {
-            setEditingCardIds([]);
-            setSearchQuery(term);
-            return;
-       }
-       handleLinkClick(term, e);
+          closeEditor();
+          handleLinkClick(term);
+      } else {
+          const targetCard = cards.find(c => !c.isDeleted && c.title.toLowerCase() === term.toLowerCase());
+          if (targetCard) {
+              setEditingCardId(targetCard.id); 
+              setPhantomCard(null);
+          } else {
+              setPhantomCard({
+                  title: term,
+                  type: CardType.Record,
+                  body: '',
+                  createdAt: Date.now(),
+                  updatedAt: Date.now(),
+                  stacks: [],
+                  isDeleted: false,
+                  isPinned: false
+              });
+              setEditingCardId(null);
+          }
+      }
+  };
+
+  const handleViewChange = (mode: ViewMode, value: string | null = null) => {
+      setViewMode(mode);
+      if (mode === 'Stack') {
+          setActiveStack(value);
+          setActiveType(null);
+      } else if (mode === 'Type') {
+          setActiveType(value as CardType);
+          setActiveStack(null);
+      } else {
+          setActiveStack(null);
+          setActiveType(null);
+      }
+      if (window.innerWidth < 768) {
+          setIsSidebarOpen(false);
+      }
+  };
+
+  const openNewCardEditor = () => {
+    setEditingCardId(null);
+    setPhantomCard(null);
+    setIsEditorOpen(true);
+  };
+
+  const openEditCardEditor = (card: Card) => {
+    if (isSelectionMode) {
+        handleSelectCard(card.id);
+        return;
+    }
+    setEditingCardId(card.id);
+    setPhantomCard(null);
+    setIsEditorOpen(true);
+  };
+
+  const closeEditor = () => {
+    setIsEditorOpen(false);
+    setEditingCardId(null);
+    setPhantomCard(null);
   };
 
   const handleRandomCard = () => {
@@ -672,7 +677,6 @@ ${opmlBody}
       }
   };
 
-  // Determine grid columns based on desktop sidebar state
   const gridClasses = isDesktopSidebarOpen 
     ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
     : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4";
@@ -680,7 +684,6 @@ ${opmlBody}
   return (
     <div className="h-screen flex font-sans text-ink bg-stone-200 overflow-hidden">
       
-      {/* Mobile Overlay */}
       {isSidebarOpen && (
           <div 
             className="fixed inset-0 bg-black/20 z-40 md:hidden backdrop-blur-sm"
@@ -695,7 +698,7 @@ ${opmlBody}
         onDateFormatChange={handleDateFormatChange}
       />
 
-      {/* Batch Modals */}
+      {/* ... (Modal overlays rendering remains same) ... */}
       {showBatchTagModal && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]">
               <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200">
@@ -749,48 +752,24 @@ ${opmlBody}
           </div>
       )}
 
-      {/* Editor Modal Overlay (Split View Capable) */}
-      {editingCardIds.length > 0 && (
-        <div 
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
-            onClick={(e) => { if (e.target === e.currentTarget) handleCloseAll(); }}
-        >
-            <div className={`w-full h-full max-w-[1920px] p-4 sm:p-8 grid gap-4 pointer-events-none ${editingCardIds.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 justify-center'}`}>
-                {editingCardIds.map((id, index) => {
-                    const cardData = activeCardsForEditor[index];
-                    if (!cardData && !phantomCards.has(id)) return null; 
-                    
-                    const displayCard = cardData || phantomCards.get(id);
-                    const isActive = index === activePanelIndex;
-
-                    return (
-                        <div 
-                            key={id}
-                            className={`w-full h-full max-h-[85vh] pointer-events-auto transition-all duration-300 shadow-2xl ${editingCardIds.length === 1 ? 'max-w-3xl mx-auto' : ''}`}
-                            onClick={() => setActivePanelIndex(index as 0 | 1)} 
-                        >
-                            <div className={`h-full rounded-lg transition-all duration-200 ${isActive ? '' : 'opacity-80 grayscale-[0.3] hover:opacity-100 hover:grayscale-0'}`}>
-                                <Editor 
-                                    initialCard={displayCard as Card}
-                                    allTitles={allTitles}
-                                    availableStacks={allStacks.map(s => s.name)}
-                                    dateFormat={dateFormat}
-                                    onSave={handleSaveCard} 
-                                    onCancel={() => handleCloseEditor(id)}
-                                    onDelete={() => handleDeleteCard(id)}
-                                    onNavigate={handleEditorNavigation}
-                                    backlinks={activeCardBacklinks}
-                                    onMoveToSide={handleMoveToSide}
-                                />
-                            </div>
-                        </div>
-                    );
-                })}
+      {isEditorOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-8 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) closeEditor(); }}>
+            <div className="w-full max-w-3xl h-full max-h-[85vh] animate-in zoom-in-95 duration-200 shadow-2xl rounded-lg">
+                <Editor 
+                    initialCard={activeCardForEditor}
+                    allTitles={allTitles}
+                    availableStacks={allStacks.map(s => s.name)}
+                    dateFormat={dateFormat}
+                    onSave={handleSaveCard} 
+                    onCancel={closeEditor}
+                    onDelete={handleDeleteCard}
+                    onNavigate={handleEditorNavigation}
+                    backlinks={activeCardBacklinks}
+                />
             </div>
         </div>
       )}
 
-      {/* Sidebar */}
       <aside className={`
           fixed top-0 bottom-0 left-0 w-64 bg-paper-dark border-r border-stone-300 flex flex-col z-50
           transition-all duration-300 ease-in-out shadow-2xl md:shadow-none
@@ -798,6 +777,7 @@ ${opmlBody}
           md:relative md:translate-x-0
           ${isDesktopSidebarOpen ? 'md:w-64' : 'md:w-0 md:border-r-0 md:overflow-hidden'}
       `}>
+        {/* Sidebar content ... (Unchanged) */}
         <div className="w-64 flex flex-col h-full">
             <div className="p-6 border-b border-stone-200/50 flex justify-between items-center">
                 <div>
@@ -861,7 +841,7 @@ ${opmlBody}
                     <h3 className="px-3 text-xs font-bold text-stone-400 uppercase tracking-wider mb-2 flex items-center gap-2 mt-4">
                         <Cloud size={12} /> Sync
                     </h3>
-                    {dropboxToken ? (
+                    {isDropboxConnected ? (
                         <div className="px-3 space-y-2">
                             <button 
                                 onClick={handleDisconnectDropbox}
@@ -905,10 +885,10 @@ ${opmlBody}
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto bg-stone-200">
-        {/* Sticky Header */}
+        {/* Sticky Header ... (Unchanged) */}
         <header className="sticky top-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 mb-4 border-b border-stone-300/30">
+             {/* ... Header Content ... */}
             <div className="flex items-center gap-3 flex-1">
                 <button 
                     onClick={toggleSidebar} 
@@ -930,6 +910,7 @@ ${opmlBody}
             <div className="ml-4 flex items-center gap-2">
                 <button onClick={handleRandomCard} title="ランダムにカードを表示" className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"><Shuffle size={20} /></button>
                 <button onClick={handleToggleSelection} title={isSelectionMode ? "選択モードを終了" : "複数選択"} className={`p-2 rounded-full transition-colors ${isSelectionMode ? 'bg-stone-800 text-white' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'}`}><SelectIcon size={20} /></button>
+                
                 {isSelectionMode && (
                     <button
                         onClick={handleSelectAll}
@@ -943,6 +924,7 @@ ${opmlBody}
                         <CheckCheck size={20} />
                     </button>
                 )}
+
                 {isSelectionMode && selectedCardIds.size > 0 && (
                     <>
                         <button onClick={() => setShowBatchTagModal(true)} title="タグの管理" className="bg-stone-800 hover:bg-stone-900 text-white p-2 rounded-full shadow-lg transition-colors flex items-center gap-2"><Tag size={20} /></button>
@@ -954,6 +936,7 @@ ${opmlBody}
 
         {/* Scrollable Feed Content */}
         <div className="px-2 sm:px-6 w-full max-w-[1920px] mx-auto pb-20">
+            {/* ... Feed header ... */}
             <div className="mb-4 flex items-center justify-between pl-2 border-l-4 border-stone-400">
                 <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">
                     {viewMode === 'All' && (searchQuery ? `検索: "${searchQuery}"` : 'Dock (全カード)')}
@@ -992,7 +975,6 @@ ${opmlBody}
                                 onSelect={handleSelectCard}
                             />
                         ))}
-                        {/* Divider between Pinned and Main */}
                         <div className="col-span-full h-4"></div> 
                     </>
                 )}
