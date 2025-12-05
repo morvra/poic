@@ -1,6 +1,8 @@
 // Dropbox API Utilities with PKCE Flow (IndexedDB版)
 
 import { idbStorage } from './indexedDB';
+import type { SyncMetadata, Card } from '../types';
+
 
 const CLIENT_ID = '5hwhw0juzjrs0o0'; // Provided App Key
 // redirect_uri must be configured in Dropbox App Console to match the deployed URL
@@ -216,6 +218,142 @@ export const downloadFromDropbox = async (): Promise<any | null> => {
   }
 
   return await response.json();
+};
+
+// 差分同期用のファイルパス
+const DELTA_FILE_PATH = '/poic_delta.json';
+const METADATA_FILE_PATH = '/poic_metadata.json';
+
+// 差分データの型
+interface DeltaData {
+  timestamp: number;
+  changes: Card[];
+}
+
+// 差分アップロード（変更されたカードのみ送信）
+export const uploadDeltaToDropbox = async (changedCards: Card[], metadata: SyncMetadata) => {
+  const token = await getAccessToken();
+  if (!token) throw new Error('Unauthorized');
+
+  const deltaData: DeltaData = {
+    timestamp: Date.now(),
+    changes: changedCards
+  };
+
+  // 差分データをアップロード
+  const deltaContent = JSON.stringify(deltaData);
+  await fetch('https://content.dropboxapi.com/2/files/upload', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/octet-stream',
+      'Dropbox-API-Arg': JSON.stringify({
+        path: DELTA_FILE_PATH,
+        mode: 'overwrite',
+        autorename: false,
+        mute: true
+      })
+    },
+    body: deltaContent
+  });
+
+  // メタデータを更新
+  const metadataContent = JSON.stringify(metadata);
+  await fetch('https://content.dropboxapi.com/2/files/upload', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/octet-stream',
+      'Dropbox-API-Arg': JSON.stringify({
+        path: METADATA_FILE_PATH,
+        mode: 'overwrite',
+        autorename: false,
+        mute: true
+      })
+    },
+    body: metadataContent
+  });
+};
+
+// 差分ダウンロード（変更分のみ取得）
+export const downloadDeltaFromDropbox = async (): Promise<DeltaData | null> => {
+  const token = await getAccessToken();
+  if (!token) throw new Error('Unauthorized');
+
+  const response = await fetch('https://content.dropboxapi.com/2/files/download', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Dropbox-API-Arg': JSON.stringify({
+        path: DELTA_FILE_PATH
+      })
+    }
+  });
+
+  if (response.status === 409) {
+    return null; // ファイルが存在しない
+  }
+
+  if (!response.ok) {
+    throw new Error(`Dropbox Download Failed: ${response.status}`);
+  }
+
+  return await response.json();
+};
+
+// メタデータダウンロード
+export const downloadMetadataFromDropbox = async (): Promise<SyncMetadata | null> => {
+  const token = await getAccessToken();
+  if (!token) throw new Error('Unauthorized');
+
+  const response = await fetch('https://content.dropboxapi.com/2/files/download', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Dropbox-API-Arg': JSON.stringify({
+        path: METADATA_FILE_PATH
+      })
+    }
+  });
+
+  if (response.status === 409) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Dropbox Download Failed: ${response.status}`);
+  }
+
+  return await response.json();
+};
+
+// 初回同期用：フルデータをアップロード
+export const uploadFullDataToDropbox = async (data: Card[]) => {
+  await uploadToDropbox(data);
+  
+  // メタデータを初期化
+  const metadata: SyncMetadata = {
+    lastSyncTime: Date.now(),
+    localChanges: []
+  };
+  
+  const token = await getAccessToken();
+  if (!token) throw new Error('Unauthorized');
+  
+  await fetch('https://content.dropboxapi.com/2/files/upload', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/octet-stream',
+      'Dropbox-API-Arg': JSON.stringify({
+        path: METADATA_FILE_PATH,
+        mode: 'overwrite',
+        autorename: false,
+        mute: true
+      })
+    },
+    body: JSON.stringify(metadata)
+  });
 };
 
 export const isAuthenticated = async (): Promise<boolean> => {

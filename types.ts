@@ -30,3 +30,8 @@ export interface PoicStats {
   gtdTotal: number;
   reference: number;
 }
+
+export interface SyncMetadata {
+  lastSyncTime: number;
+  localChanges: string[]; // 変更されたカードのIDリスト
+}

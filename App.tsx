@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardType, ViewMode, PoicStats } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern, cleanupDeletedCards } from './utils';
-import { uploadToDropbox, downloadFromDropbox, isAuthenticated, logout, initiateAuth, handleAuthCallback } from './utils/dropbox';
+import { uploadToDropbox, downloadFromDropbox, isAuthenticated, logout, initiateAuth, handleAuthCallback, uploadDeltaToDropbox, downloadDeltaFromDropbox, downloadMetadataFromDropbox, uploadFullDataToDropbox } from './utils/dropbox';
+import type { SyncMetadata } from './types';
 import { idbStorage, migrateFromLocalStorage } from './utils/indexedDB';
 import { CardItem } from './components/CardItem';
 import { Editor } from './components/Editor';
@@ -90,6 +91,12 @@ export default function App() {
   const [dateFormat, setDateFormat] = useState<string>(() => {
     return localStorage.getItem('poic-date-format') || 'YYYY/MM/DD ddd HH:mm';
   });
+
+  const [syncMetadata, setSyncMetadata] = useState<SyncMetadata>({
+    lastSyncTime: 0,
+    localChanges: []
+  });
+  const [isInitialSync, setIsInitialSync] = useState(true);
 
   // --- Memos ---
   const getCardData = (id: string | null): Card | undefined => {
@@ -297,7 +304,50 @@ initializeData();
       console.error('Failed to save cards:', err);
     });
   }, [cards, isLoading]);
-  useEffect(() => { if (!dropboxToken) return; const timeoutId = setTimeout(() => { const cleanedCards = cleanupDeletedCards(cards, 30); if (cleanedCards.length !== cards.length) { setCards(cleanedCards); } syncUpload(dropboxToken, cards); }, 10000); return () => clearTimeout(timeoutId); }, [cards, dropboxToken]);
+  useEffect(() => { 
+    if (!dropboxToken || isLoading) return;
+  
+    const timeoutId = setTimeout(async () => {
+      try {
+        // クリーンアップ
+        const cleanedCards = cleanupDeletedCards(cards, 30);
+        if (cleanedCards.length !== cards.length) {
+          setCards(cleanedCards);
+          return; // 次のサイクルでアップロード
+        }
+
+        // 初回は全データ同期
+        if (isInitialSync) {
+          await uploadFullDataToDropbox(cleanedCards);
+          setIsInitialSync(false);
+          setSyncMetadata({
+            lastSyncTime: Date.now(),
+            localChanges: []
+          });
+          return;
+        }
+
+        // 差分同期：変更されたカードのみ
+        if (syncMetadata.localChanges.length > 0) {
+          const changedCards = cleanedCards.filter(c => 
+            syncMetadata.localChanges.includes(c.id)
+          );
+        
+          const newMetadata: SyncMetadata = {
+            lastSyncTime: Date.now(),
+            localChanges: []
+          };
+        
+          await uploadDeltaToDropbox(changedCards, newMetadata);
+          setSyncMetadata(newMetadata);
+        }
+      } catch (error) {
+        console.error('Sync error:', error);
+      }
+    }, 10000); 
+
+    return () => clearTimeout(timeoutId); 
+  }, [cards, dropboxToken, isLoading, isInitialSync, syncMetadata]);
   useEffect(() => { 
     const handleKeyDown = (e: KeyboardEvent) => { 
       // エディターやサイドバーが開いている時、入力フィールドにフォーカスがある時はスキップ
@@ -347,7 +397,60 @@ initializeData();
   };
   
   // --- Dropbox Helpers ---
-  const syncDownload = async (token?: string) => { setIsSyncing(true); try { const remoteCards = await downloadFromDropbox(); if (remoteCards && Array.isArray(remoteCards)) { setCards(prevCards => { const mergedMap = new Map<string, Card>(); prevCards.forEach(c => mergedMap.set(c.id, c)); remoteCards.forEach((rc: Card) => { const local = mergedMap.get(rc.id); if (!local || (rc.updatedAt > local.updatedAt)) { mergedMap.set(rc.id, rc); } }); return Array.from(mergedMap.values()); }); } } catch (error) { console.error('Dropbox Sync Error:', error); if (error instanceof Error && (error.message.includes('Unauthorized') || error.message.includes('401'))) { handleDisconnectDropbox(); } } finally { setIsSyncing(false); } };
+  const syncDownload = async (token?: string) => { 
+    setIsSyncing(true); 
+    try {
+      // 初回はフル同期
+      if (isInitialSync) {
+        const remoteCards = await downloadFromDropbox();
+        if (remoteCards && Array.isArray(remoteCards)) {
+          setCards(remoteCards);
+        }
+        setIsInitialSync(false);
+        setSyncMetadata({
+          lastSyncTime: Date.now(),
+          localChanges: []
+        });
+        return;
+      }
+
+      // 差分同期
+      const [deltaData, remoteMetadata] = await Promise.all([
+        downloadDeltaFromDropbox(),
+        downloadMetadataFromDropbox()
+      ]);
+
+      if (deltaData && deltaData.changes.length > 0) {
+        setCards(prevCards => {
+          const mergedMap = new Map<string, Card>();
+        
+          // 既存カードをマップに
+          prevCards.forEach(c => mergedMap.set(c.id, c));
+        
+          // 変更分をマージ（updatedAtが新しい方を優先）
+          deltaData.changes.forEach(rc => {
+            const local = mergedMap.get(rc.id);
+            if (!local || rc.updatedAt > local.updatedAt) {
+              mergedMap.set(rc.id, rc);
+            }
+          });
+        
+          return Array.from(mergedMap.values());
+        });
+
+        if (remoteMetadata) {
+          setSyncMetadata(remoteMetadata);
+        }
+      }
+    } catch (error) { 
+      console.error('Dropbox Sync Error:', error); 
+      if (error instanceof Error && (error.message.includes('Unauthorized') || error.message.includes('401'))) { 
+        handleDisconnectDropbox(); 
+      } 
+    } finally { 
+      setIsSyncing(false); 
+    } 
+  };
   const syncUpload = async (token: string, data: Card[]) => { if (!isDropboxConnected) return; setIsSyncing(true); try { await uploadToDropbox(data); } catch (error) { console.error('Dropbox Upload Error:', error); if (error instanceof Error && (error.message.includes('Token refresh failed') || error.message.includes('Unauthorized'))) { handleDisconnectDropbox(); } } finally { setIsSyncing(false); } };
   const handleManualSync = () => { syncDownload(); };
   const handleConnectDropbox = () => { initiateAuth(); };
@@ -488,10 +591,18 @@ initializeData();
             setCards(cards.map(c => c.id === currentId ? { ...c, ...cardData, updatedAt: Date.now() } as Card : c));
         }
     }
+    setSyncMetadata(prev => ({
+      ...prev,
+      localChanges: [...new Set([...prev.localChanges, currentId])]
+    }));
   };
 
   const handleDeleteCard = (id: string) => {
     setCards(cards.map(c => c.id === id ? { ...c, isDeleted: true, deletedAt: Date.now(), updatedAt: Date.now() } : c));
+    setSyncMetadata(prev => ({
+      ...prev,
+      localChanges: [...new Set([...prev.localChanges, id])]
+    }));
     if (activeModalCardId === id) handleCloseModal();
     if (activeSideCardId === id) handleCloseSide();
   };
