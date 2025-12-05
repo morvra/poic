@@ -380,10 +380,6 @@ export default function App() {
             setCards(cards.map(c => c.id === currentId ? { ...c, ...cardData, updatedAt: Date.now() } as Card : c));
         }
     }
-    
-    if (shouldClose) {
-        if (activeModalCardId === currentId) handleCloseModal();
-    }
   };
 
   const handleDeleteCard = (id: string) => {
@@ -500,7 +496,10 @@ export default function App() {
                             allTitles={allTitles}
                             availableStacks={allStacks.map(s => s.name)}
                             dateFormat={dateFormat}
-                            onSave={handleSaveCard} 
+                            onSave={(data, close) => {
+                                handleSaveCard(data);
+                                if (close) handleCloseModal();
+                            }}
                             onCancel={handleCloseModal}
                             onDelete={() => handleDeleteCard(activeModalCard.id)}
                             onNavigate={(term, e) => handleLinkClick(term, e)} 
@@ -520,7 +519,10 @@ export default function App() {
                         allTitles={allTitles}
                         availableStacks={allStacks.map(s => s.name)}
                         dateFormat={dateFormat}
-                        onSave={handleSaveCard} 
+                        onSave={(data, close) => {
+                            handleSaveCard(data);
+                            if (close) handleCloseSide(); // サイドパネルだけ閉じる
+                        }}
                         onCancel={handleCloseSide}
                         onDelete={() => handleDeleteCard(activeSideCard.id)}
                         onNavigate={(term, e) => handleLinkClick(term, e)} 

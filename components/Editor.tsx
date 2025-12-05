@@ -202,6 +202,25 @@ export const Editor: React.FC<EditorProps> = ({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!containerRef.current?.contains(document.activeElement)) {
+          return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleAutoSave(); // Trigger save with current state
+        onSave({
+          id: initialCard?.id,
+          title,
+          body,
+          type,
+          dueDate: type === CardType.GTD && dueDate ? new Date(dueDate).getTime() : undefined,
+          stacks: stacks.split(',').map(s => s.trim()).filter(s => s.length > 0),
+          createdAt: new Date(createdAt).getTime(),
+          completed: type === CardType.GTD ? completed : false,
+          isPinned
+        }, true); // true = close editor
+        return;
+      }
       if (e.altKey && e.key.toLowerCase() === 't') {
         e.preventDefault();
         if (!isEditingBody) {
