@@ -37,10 +37,19 @@ const INITIAL_CARDS: Card[] = [
     id: '10',
     type: CardType.Record,
     title: '朝の振り返り',
-    body: '雨が窓を優しく叩いている。\n\n> 08:30 コーディングには最適な天気だ。\n\n今日はスタッキングアニメーションの実装に集中しよう。',
+    body: '雨が窓を優しく叩いている。\n\n08:30 コーディングには最適な天気だ。\n\n今日はスタッキングアニメーションの実装に集中しよう。',
     createdAt: Date.now(),
     updatedAt: Date.now(),
     stacks: ['Journal']
+  },
+  {
+    id: '20',
+    type: CardType.Reference,
+    title: 'ショートカットキー',
+    body: 'カード一覧\nn: 新規作成\ns: 同期\nd: すべてのカードに切り替え\ng: GTDタスクに切り替え\nカードをctrl+クリック: 右側に展開\n\nカード編集中\nctrl+enter, esc: モーダルを閉じる\nalt+t: タイムスタンプ挿入',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    stacks: []
   },
 ];
 
