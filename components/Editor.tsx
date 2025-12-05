@@ -58,7 +58,6 @@ export const Editor: React.FC<EditorProps> = ({
   const [isEditingBody, setIsEditingBody] = useState(
     !initialCard || !initialCard.id || initialCard.id.startsWith('new-') || initialCard.id.startsWith('phantom-')
   );
-  
   const [initialCursorOffset, setInitialCursorOffset] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -540,7 +539,7 @@ export const Editor: React.FC<EditorProps> = ({
                 <>
                     <textarea
                         ref={bodyRef}
-                        className="w-full min-h-[150px] resize-none border-none focus:outline-none bg-transparent text-[17px] font-sans leading-relaxed text-ink/90 placeholder-stone-300 overflow-hidden"
+                        className="block w-full min-h-[150px] resize-none border-none focus:outline-none bg-transparent text-[17px] font-sans leading-relaxed text-ink/90 placeholder-stone-300 overflow-hidden"
                         placeholder="内容を入力... (Alt+T: タイムスタンプ, [[ : リンク)"
                         value={body}
                         onChange={handleBodyChange}
