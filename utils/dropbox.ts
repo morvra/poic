@@ -1,6 +1,6 @@
 // Dropbox API Utilities with PKCE Flow
 
-const CLIENT_ID = '7f660m206ftjupz'; // Provided App Key
+const CLIENT_ID = '5hwhw0juzjrs0o0'; // Provided App Key
 // redirect_uri must be configured in Dropbox App Console to match the deployed URL
 const REDIRECT_URI = window.location.origin + window.location.pathname; 
 
