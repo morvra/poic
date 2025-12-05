@@ -2,15 +2,13 @@ import React from 'react';
 
 interface CardRendererProps {
   content: string;
-  onLinkClick: (term: string) => void;
+  onLinkClick: (term: string, e?: React.MouseEvent) => void; // Update signature
   className?: string;
 }
 
 export const CardRenderer: React.FC<CardRendererProps> = ({ content, onLinkClick, className = '' }) => {
-  // Simple parser for [[WikiLinks]] and URLs (Hashtags support removed)
+  // Simple parser for [[WikiLinks]] and URLs
   const renderContent = () => {
-    // Regex splits: WikiLink, or URL (http/https)
-    // Removed |#[^\s#]+ from regex
     const parts = content.split(/(\[\[.*?\]\]|https?:\/\/[^\s]+)/g);
 
     return parts.map((part, index) => {
@@ -20,7 +18,11 @@ export const CardRenderer: React.FC<CardRendererProps> = ({ content, onLinkClick
         return (
           <span
             key={index}
-            onClick={(e) => { e.stopPropagation(); onLinkClick(term); }}
+            onClick={(e) => { 
+                e.stopPropagation(); 
+                // Pass the event object for modifier key detection
+                onLinkClick(term, e); 
+            }}
             className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer font-medium rounded-sm inline-flex items-center"
           >
             <span className="text-blue-300 select-none">[[</span>
@@ -46,7 +48,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({ content, onLinkClick
         );
       }
       
-      // Normal text (includes #hashtags now)
+      // Normal text
       return <span key={index}>{part}</span>;
     });
   };

@@ -6,8 +6,8 @@ import { Clock, CheckCircle, Circle, FileText, Lightbulb, CheckSquare, BookOpen,
 
 interface CardItemProps {
   card: Card;
-  dateFormat: string; // Receive dateFormat
-  onClick: (card: Card) => void;
+  dateFormat: string; 
+  onClick: (card: Card, e: React.MouseEvent) => void; 
   onLinkClick: (term: string) => void;
   onToggleComplete?: (id: string) => void;
   onStackClick?: (stack: string) => void;
@@ -15,7 +15,6 @@ interface CardItemProps {
   style?: React.CSSProperties;
   domId?: string; 
   
-  // Selection props
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onSelect?: (id: string) => void;
@@ -64,7 +63,7 @@ export const CardItem: React.FC<CardItemProps> = ({
       e.preventDefault();
       onSelect(card.id);
     } else {
-      onClick(card);
+      onClick(card, e);
     }
   };
 
@@ -84,20 +83,17 @@ export const CardItem: React.FC<CardItemProps> = ({
         {/* Header: Title and Type */}
         <div className="flex items-center justify-between mb-2 py-1.5 gap-3">
             <div className="flex items-center gap-2 flex-1 min-w-0">
-                {/* Selection Checkbox */}
                 {isSelectionMode && (
                   <div className="text-stone-400 mr-1 shrink-0">
                     {isSelected ? <CheckSquare size={20} className="text-blue-600" /> : <Square size={20} />}
                   </div>
                 )}
 
-                {/* Type Icon & Badge */}
                 <div className={`flex items-center gap-1 shrink-0 ${typeBadgeClass} px-1.5 py-0.5 rounded text-xs font-bold uppercase tracking-wide`}>
                     <TypeIcon type={card.type} />
                     <span className="hidden sm:inline">{SHORT_TYPE_NAMES[card.type]}</span>
                 </div>
                 
-                {/* Pin Icon - Only show if already pinned (to allow unpinning) */}
                 {onTogglePin && !isSelectionMode && card.isPinned && (
                     <button
                         onClick={(e) => { e.stopPropagation(); onTogglePin(card.id); }}
@@ -108,14 +104,12 @@ export const CardItem: React.FC<CardItemProps> = ({
                     </button>
                 )}
 
-                {/* Title */}
                 <h3 className={`font-bold text-ink text-[16px] leading-tight truncate group-hover:text-stone-700 transition-colors ${card.completed ? 'text-stone-400' : ''}`}>
                   {card.title}
                 </h3>
             </div>
             
             <div className="flex items-center gap-2 shrink-0">
-                {/* GTD Complete Toggle */}
                 {isGTD && onToggleComplete && !isSelectionMode && (
                 <button 
                     onClick={(e) => { e.stopPropagation(); onToggleComplete(card.id); }}
@@ -131,7 +125,6 @@ export const CardItem: React.FC<CardItemProps> = ({
         <div className="flex flex-wrap items-center gap-3 text-[13px] text-stone-400 font-mono mb-2 leading-none">
              <span className="flex items-center gap-1">
                 <Clock size={12} />
-                {/* Use configurable date format with Day of Week */}
                 {formatTimestampByPattern(new Date(card.createdAt), dateFormat)}
              </span>
              {isGTD && card.dueDate && (
@@ -154,7 +147,7 @@ export const CardItem: React.FC<CardItemProps> = ({
              )}
         </div>
 
-        {/* Body Preview - Removed mt-auto to align top */}
+        {/* Body Preview */}
         <div className="relative">
              <div className="line-clamp-3 font-sans text-sm text-ink/90 leading-relaxed">
                 <CardRenderer content={card.body} onLinkClick={onLinkClick} />
