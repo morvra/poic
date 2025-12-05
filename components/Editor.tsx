@@ -55,7 +55,10 @@ export const Editor: React.FC<EditorProps> = ({
   const [completed, setCompleted] = useState(initialCard?.completed || false);
   const [isPinned, setIsPinned] = useState<number | boolean>(initialCard?.isPinned || false);
   
-  const [isEditingBody, setIsEditingBody] = useState(!initialCard || !initialCard.id); 
+  const [isEditingBody, setIsEditingBody] = useState(
+    !initialCard || !initialCard.id || initialCard.id.startsWith('new-') || initialCard.id.startsWith('phantom-')
+  );
+  
   const [initialCursorOffset, setInitialCursorOffset] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -87,7 +90,10 @@ export const Editor: React.FC<EditorProps> = ({
   }, [initialCard?.id]);
 
   useEffect(() => {
-      if ((!initialCard || (!initialCard.id && !initialCard.title)) && titleInputRef.current) {
+      const isNewCard = !initialCard || !initialCard.id || initialCard.id.startsWith('new-');
+      const isPhantom = !!initialCard?.title; // タイトルがある場合はリンク作成(Phantom)とみなす
+
+      if (isNewCard && !isPhantom && titleInputRef.current) {
           setTimeout(() => {
               titleInputRef.current?.focus();
           }, 50);
@@ -95,11 +101,19 @@ export const Editor: React.FC<EditorProps> = ({
   }, [initialCard]);
 
   useEffect(() => {
-    if (isEditingBody && bodyRef.current) {
-      bodyRef.current.style.height = 'auto';
-      bodyRef.current.style.height = `${bodyRef.current.scrollHeight}px`;
-    }
-  }, [body, isEditingBody]);
+      if (isEditingBody && bodyRef.current) {
+          bodyRef.current.style.height = 'auto';
+          bodyRef.current.style.height = `${bodyRef.current.scrollHeight}px`;
+          
+          const isNewCard = initialCard?.id?.startsWith('new-');
+          const isPhantom = (isNewCard || !initialCard?.id) && !!initialCard?.title;
+          const isExplicitEdit = !!initialCard?.id && !isNewCard; // 既存カードの編集
+          const isTabFocus = document.activeElement === readViewRef.current;
+          if (isPhantom || isExplicitEdit || isTabFocus) {
+              bodyRef.current.focus();
+          }
+      }
+  }, [isEditingBody]);
 
   useEffect(() => {
       const currentId = initialCard?.id;
@@ -399,7 +413,7 @@ export const Editor: React.FC<EditorProps> = ({
            {onMoveToSide && initialCard?.id && (
              <button
                 onClick={onMoveToSide}
-                className="text-stone-300 hover:text-stone-500 p-2 rounded-full hover:bg-stone-100 transition-colors"
+                className="hidden md:block text-stone-300 hover:text-stone-500 p-2 rounded-full hover:bg-stone-100 transition-colors"
                 title="右側に移動して一覧に戻る"
              >
                 <ArrowRightFromLine size={20} />
@@ -466,6 +480,7 @@ export const Editor: React.FC<EditorProps> = ({
                 className={`flex-1 min-w-0 text-xl sm:text-2xl font-bold font-sans text-ink placeholder-stone-300 border-none focus:outline-none bg-transparent p-0 ${completed ? 'text-stone-400' : ''}`}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                autoFocus={!initialCard?.id && !initialCard?.title}
             />
             {type === CardType.GTD && (
                 <button 

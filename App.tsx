@@ -491,7 +491,7 @@ export default function App() {
             
             {activeModalCard && (
                 <div 
-                    className={`fixed inset-y-0 left-0 z-[100] flex items-center justify-center p-4 sm:p-8 bg-stone-200/90 backdrop-blur-sm animate-in fade-in duration-200 ${sidePanelOpen ? 'right-0 md:right-[45%] min-w-[63%]' : 'right-0'}`} 
+                    className={`fixed inset-y-0 left-0 z-[100] flex items-center justify-center p-4 sm:p-8 bg-stone-200/90 backdrop-blur-sm animate-in fade-in duration-200 ${sidePanelOpen ? 'right-0 md:right-[500px] min-w-[auto]' : 'right-0'}`} 
                     onClick={(e) => { if (e.target === e.currentTarget) handleCloseModal(); }}
                 >
                     <div className="w-full max-w-3xl h-auto max-h-[90vh] animate-in zoom-in-95 duration-200 shadow-2xl rounded-lg bg-paper pointer-events-auto">
@@ -513,7 +513,7 @@ export default function App() {
           </main>
 
           {activeSideCard && (
-            <aside className="w-full md:w-[45%] min-w-[350px] border-l border-stone-300 bg-paper shadow-xl z-40 overflow-hidden transition-all duration-300 ease-in-out relative h-full">
+            <aside className="w-full md:w-[500px] md:flex-none border-l border-stone-300 bg-paper shadow-xl z-40 overflow-hidden transition-all duration-300 ease-in-out relative h-full">
                  <div className="h-full">
                     <Editor 
                         initialCard={activeSideCard}
