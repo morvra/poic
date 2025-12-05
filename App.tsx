@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardType, ViewMode, PoicStats } from './types';
-import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern } from './utils';
+import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern, cleanupDeletedCards } from './utils';
 import { uploadToDropbox, downloadFromDropbox, isAuthenticated, logout, initiateAuth, handleAuthCallback } from './utils/dropbox';
 import { idbStorage, migrateFromLocalStorage } from './utils/indexedDB';
 import { CardItem } from './components/CardItem';
@@ -288,7 +288,7 @@ initializeData();
       console.error('Failed to save cards:', err);
     });
   }, [cards, isLoading]);
-  useEffect(() => { if (!dropboxToken) return; const timeoutId = setTimeout(() => { syncUpload(dropboxToken, cards); }, 3000); return () => clearTimeout(timeoutId); }, [cards, dropboxToken]);
+  useEffect(() => { if (!dropboxToken) return; const timeoutId = setTimeout(() => { const cleanedCards = cleanupDeletedCards(cards, 30); if (cleanedCards.length !== cards.length) { setCards(cleanedCards); } syncUpload(dropboxToken, cards); }, 10000); return () => clearTimeout(timeoutId); }, [cards, dropboxToken]);
   useEffect(() => { 
     const handleKeyDown = (e: KeyboardEvent) => { 
       // エディターやサイドバーが開いている時、入力フィールドにフォーカスがある時はスキップ
@@ -482,7 +482,7 @@ initializeData();
   };
 
   const handleDeleteCard = (id: string) => {
-    setCards(cards.map(c => c.id === id ? { ...c, isDeleted: true, updatedAt: Date.now() } : c));
+    setCards(cards.map(c => c.id === id ? { ...c, isDeleted: true, deletedAt: Date.now(), updatedAt: Date.now() } : c));
     if (activeModalCardId === id) handleCloseModal();
     if (activeSideCardId === id) handleCloseSide();
   };
@@ -490,7 +490,7 @@ initializeData();
   const handleToggleSelection = () => { setIsSelectionMode(!isSelectionMode); setSelectedCardIds(new Set()); setShowBatchDeleteConfirm(false); setShowBatchTagModal(false); };
   const handleSelectCard = (id: string) => { const newSelection = new Set(selectedCardIds); if (newSelection.has(id)) newSelection.delete(id); else newSelection.add(id); setSelectedCardIds(newSelection); };
   const handleClickDeleteSelected = () => { if (selectedCardIds.size === 0) return; setShowBatchDeleteConfirm(true); };
-  const confirmBatchDelete = () => { setCards(cards.map(c => selectedCardIds.has(c.id) ? { ...c, isDeleted: true, updatedAt: Date.now() } : c)); setSelectedCardIds(new Set()); setIsSelectionMode(false); setShowBatchDeleteConfirm(false); };
+  const confirmBatchDelete = () => { setCards(cards.map(c => selectedCardIds.has(c.id) ? { ...c, isDeleted: true, deletedAt: Date.now(), updatedAt: Date.now() } : c)); setSelectedCardIds(new Set()); setIsSelectionMode(false); setShowBatchDeleteConfirm(false); };
   const handleBatchAddTag = () => { if (!batchTagInput.trim()) return; const tagToAdd = batchTagInput.trim(); setCards(cards.map(c => { if (selectedCardIds.has(c.id)) { const currentStacks = c.stacks || []; if (!currentStacks.includes(tagToAdd)) { return { ...c, stacks: [...currentStacks, tagToAdd], updatedAt: Date.now() }; } } return c; })); setBatchTagInput(''); };
   const handleBatchRemoveTag = (tag: string) => { setCards(cards.map(c => { if (selectedCardIds.has(c.id)) { const currentStacks = c.stacks || []; if (currentStacks.includes(tag)) { return { ...c, stacks: currentStacks.filter(s => s !== tag), updatedAt: Date.now() }; } } return c; })); };
   const toggleGTDComplete = (id: string) => { setCards(cards.map(c => c.id === id ? { ...c, completed: !c.completed, updatedAt: Date.now() } : c)); };

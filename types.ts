@@ -16,6 +16,7 @@ export interface Card {
   completed?: boolean; // Only for GTD
   stacks: string[]; // "Task Forces" or Themes
   isDeleted?: boolean;
+  deletedAt?: number;
   isPinned?: number | boolean; // Timestamp of when it was pinned
 }
 

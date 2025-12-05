@@ -1,3 +1,5 @@
+import { Card } from './types';
+
 export const generateId = (): string => {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
 };
@@ -63,4 +65,20 @@ export const formatDateWithDay = (timestamp: number): string => {
     const dd = pad(date.getDate());
     const day = DAYS_EN[date.getDay()];
     return `${yyyy}/${mm}/${dd} ${day}`;
+};
+
+// 削除済みカードのクリーンアップ（指定日数経過したものを完全削除）
+export const cleanupDeletedCards = (cards: Card[], retentionDays: number = 30): Card[] => {
+  const cutoffTime = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
+  
+  return cards.filter(card => {
+    // 削除されていないカードはそのまま保持
+    if (!card.isDeleted) return true;
+    
+    // 削除日時が記録されていないカードは保持（後方互換性）
+    if (!card.deletedAt) return true;
+    
+    // 保持期間内の削除カードは保持
+    return card.deletedAt > cutoffTime;
+  });
 };
