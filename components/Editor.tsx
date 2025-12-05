@@ -207,17 +207,24 @@ export const Editor: React.FC<EditorProps> = ({
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
+        
+        // タイトルも本文も空の場合は保存せずに閉じるだけ
+        if (!title.trim() && !body.trim()) {
+            onCancel();
+            return;
+        }
+        
         handleAutoSave(); // Trigger save with current state
         onSave({
-          id: initialCard?.id,
-          title,
-          body,
-          type,
-          dueDate: type === CardType.GTD && dueDate ? new Date(dueDate).getTime() : undefined,
-          stacks: stacks.split(',').map(s => s.trim()).filter(s => s.length > 0),
-          createdAt: new Date(createdAt).getTime(),
-          completed: type === CardType.GTD ? completed : false,
-          isPinned
+            id: initialCard?.id,
+            title,
+            body,
+            type,
+            dueDate: type === CardType.GTD && dueDate ? new Date(dueDate).getTime() : undefined,
+            stacks: stacks.split(',').map(s => s.trim()).filter(s => s.length > 0),
+            createdAt: new Date(createdAt).getTime(),
+            completed: type === CardType.GTD ? completed : false,
+            isPinned
         }, true); // true = close editor
         return;
       }

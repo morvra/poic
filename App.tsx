@@ -289,7 +289,39 @@ initializeData();
     });
   }, [cards, isLoading]);
   useEffect(() => { if (!dropboxToken) return; const timeoutId = setTimeout(() => { syncUpload(dropboxToken, cards); }, 3000); return () => clearTimeout(timeoutId); }, [cards, dropboxToken]);
-  useEffect(() => { const handleKeyDown = (e: KeyboardEvent) => { if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return; if (e.key === 'n' && !activeModalCardId) { e.preventDefault(); openNewCardEditor(); } }; window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown); }, [activeModalCardId]);
+  useEffect(() => { 
+    const handleKeyDown = (e: KeyboardEvent) => { 
+      // エディターやサイドバーが開いている時、入力フィールドにフォーカスがある時はスキップ
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return; 
+      if (activeModalCardId || activeSideCardId) return;
+
+      // n: 新規カード作成
+      if (e.key === 'n') { 
+        e.preventDefault();
+        openNewCardEditor();
+      }
+
+      // s: Dropbox同期
+      if (e.key === 's' && isDropboxConnected) {
+        e.preventDefault();
+        handleManualSync();
+      }
+
+      // d: すべてのカード画面
+      if (e.key === 'd') {
+        e.preventDefault();
+        handleHome();
+      }
+
+      // g: GTDタスク画面
+      if (e.key === 'g') {
+        e.preventDefault();
+        handleViewChange('GTD');
+      }
+    }; 
+    window.addEventListener('keydown', handleKeyDown); 
+    return () => window.removeEventListener('keydown', handleKeyDown); 
+  }, [activeModalCardId, activeSideCardId, isDropboxConnected]);
 
   const handleDateFormatChange = (format: string) => {
     setDateFormat(format);
