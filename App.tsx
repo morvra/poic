@@ -491,10 +491,10 @@ export default function App() {
             
             {activeModalCard && (
                 <div 
-                    className={`fixed inset-y-0 left-0 z-[100] flex items-center justify-center p-4 sm:p-8 bg-stone-200/90 backdrop-blur-sm animate-in fade-in duration-200 ${sidePanelOpen ? 'right-0 md:right-[500px] min-w-[auto]' : 'right-0'}`} 
+                    className={`fixed inset-y-0 left-0 z-[100] flex items-center justify-center p-4 sm:p-8 bg-stone-900/20 backdrop-blur-[1px] animate-in fade-in duration-200 ${sidePanelOpen ? 'right-0 md:right-[500px] min-w-[auto]' : 'right-0'}`} 
                     onClick={(e) => { if (e.target === e.currentTarget) handleCloseModal(); }}
                 >
-                    <div className="w-full max-w-2xl h-auto max-h-[90vh] animate-in zoom-in-95 duration-200 shadow-2xl rounded-lg bg-paper pointer-events-auto">
+                    <div className="w-full max-w-2xl h-auto max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl rounded-lg bg-paper pointer-events-auto">
                         <Editor 
                             initialCard={activeModalCard}
                             allTitles={allTitles}

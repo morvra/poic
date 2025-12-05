@@ -112,7 +112,7 @@ export const Editor: React.FC<EditorProps> = ({
               bodyRef.current.focus();
           }
       }
-  }, [isEditingBody]);
+  }, [body, isEditingBody]);
 
   useEffect(() => {
       const currentId = initialCard?.id;
@@ -386,7 +386,6 @@ export const Editor: React.FC<EditorProps> = ({
   };
 
   return (
-    // Changed: h-full -> h-auto max-h-full to allow shrinking
     <div className={`bg-paper w-full h-auto max-h-full flex flex-col md:rounded-lg shadow-none overflow-hidden relative border-t-[8px] ${TYPE_BORDER_COLOR[type]}`}>
       
       {/* Delete Confirmation Overlay ... */}
@@ -439,7 +438,7 @@ export const Editor: React.FC<EditorProps> = ({
           </button>
       </div>
 
-      <div ref={containerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 pb-20">
+      <div ref={containerRef} className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 pb-20">
         {/* Type & Date Header */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
             <div className="flex gap-2">
