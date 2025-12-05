@@ -1,4 +1,6 @@
-// Dropbox API Utilities with PKCE Flow
+// Dropbox API Utilities with PKCE Flow (IndexedDB版)
+
+import { idbStorage } from './indexedDB';
 
 const CLIENT_ID = '5hwhw0juzjrs0o0'; // Provided App Key
 // redirect_uri must be configured in Dropbox App Console to match the deployed URL
@@ -43,8 +45,8 @@ export const initiateAuth = async () => {
   const hash = await sha256(codeVerifier);
   const codeChallenge = base64UrlEncode(hash);
 
-  // Store code_verifier locally to use after redirect
-  localStorage.setItem('dropbox_code_verifier', codeVerifier);
+  // Store code_verifier in IndexedDB to use after redirect
+  await idbStorage.setItem('dropbox_code_verifier', codeVerifier);
 
   const url = new URL('https://www.dropbox.com/oauth2/authorize');
   url.searchParams.set('client_id', CLIENT_ID);
@@ -59,7 +61,7 @@ export const initiateAuth = async () => {
 };
 
 export const handleAuthCallback = async (code: string): Promise<string> => {
-  const codeVerifier = localStorage.getItem('dropbox_code_verifier');
+  const codeVerifier = await idbStorage.getItem('dropbox_code_verifier');
   if (!codeVerifier) {
     throw new Error('Code verifier not found');
   }
@@ -86,23 +88,23 @@ export const handleAuthCallback = async (code: string): Promise<string> => {
 
   const data = await response.json();
   
-  // Save tokens
-  localStorage.setItem('dropbox_access_token', data.access_token);
-  localStorage.setItem('dropbox_refresh_token', data.refresh_token);
+  // Save tokens to IndexedDB
+  await idbStorage.setItem('dropbox_access_token', data.access_token);
+  await idbStorage.setItem('dropbox_refresh_token', data.refresh_token);
   // Calculate expiry time (expires_in is in seconds)
   const expiresAt = Date.now() + (data.expires_in * 1000);
-  localStorage.setItem('dropbox_expires_at', expiresAt.toString());
+  await idbStorage.setItem('dropbox_expires_at', expiresAt.toString());
 
   // Clean up
-  localStorage.removeItem('dropbox_code_verifier');
+  await idbStorage.removeItem('dropbox_code_verifier');
   
   return data.access_token;
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
-  let accessToken = localStorage.getItem('dropbox_access_token');
-  const refreshToken = localStorage.getItem('dropbox_refresh_token');
-  const expiresAtStr = localStorage.getItem('dropbox_expires_at');
+  let accessToken = await idbStorage.getItem('dropbox_access_token');
+  const refreshToken = await idbStorage.getItem('dropbox_refresh_token');
+  const expiresAtStr = await idbStorage.getItem('dropbox_expires_at');
   
   if (!accessToken || !refreshToken || !expiresAtStr) {
     return null;
@@ -142,13 +144,13 @@ const refreshAccessToken = async (refreshToken: string): Promise<string> => {
 
   const data = await response.json();
   
-  localStorage.setItem('dropbox_access_token', data.access_token);
+  await idbStorage.setItem('dropbox_access_token', data.access_token);
   // Refresh token might be rotated, though usually stays same for Dropbox
   if (data.refresh_token) {
-      localStorage.setItem('dropbox_refresh_token', data.refresh_token);
+    await idbStorage.setItem('dropbox_refresh_token', data.refresh_token);
   }
   const expiresAt = Date.now() + (data.expires_in * 1000);
-  localStorage.setItem('dropbox_expires_at', expiresAt.toString());
+  await idbStorage.setItem('dropbox_expires_at', expiresAt.toString());
 
   return data.access_token;
 };
@@ -216,13 +218,14 @@ export const downloadFromDropbox = async (): Promise<any | null> => {
   return await response.json();
 };
 
-export const isAuthenticated = () => {
-    return !!localStorage.getItem('dropbox_refresh_token');
-}
+export const isAuthenticated = async (): Promise<boolean> => {
+  const refreshToken = await idbStorage.getItem('dropbox_refresh_token');
+  return !!refreshToken;
+};
 
-export const logout = () => {
-    localStorage.removeItem('dropbox_access_token');
-    localStorage.removeItem('dropbox_refresh_token');
-    localStorage.removeItem('dropbox_expires_at');
-    localStorage.removeItem('dropbox_code_verifier');
-}
+export const logout = async () => {
+  await idbStorage.removeItem('dropbox_access_token');
+  await idbStorage.removeItem('dropbox_refresh_token');
+  await idbStorage.removeItem('dropbox_expires_at');
+  await idbStorage.removeItem('dropbox_code_verifier');
+};

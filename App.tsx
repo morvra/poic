@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardType, ViewMode, PoicStats } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern } from './utils';
-import { uploadToDropbox, downloadFromDropbox, isAuthenticated, logout, initiateAuth, handleAuthCallback } from './utils/dropbox'; 
+import { uploadToDropbox, downloadFromDropbox, isAuthenticated, logout, initiateAuth, handleAuthCallback } from './utils/dropbox';
+import { idbStorage, migrateFromLocalStorage } from './utils/indexedDB';
 import { CardItem } from './components/CardItem';
 import { Editor } from './components/Editor';
 import { SettingsModal } from './components/SettingsModal'; 
@@ -45,10 +46,8 @@ const INITIAL_CARDS: Card[] = [
 
 export default function App() {
   // --- State ---
-  const [cards, setCards] = useState<Card[]>(() => {
-    const saved = localStorage.getItem('poic-cards');
-    return saved ? JSON.parse(saved) : INITIAL_CARDS;
-  });
+  const [cards, setCards] = useState<Card[]>(INITIAL_CARDS);
+  const [isLoading, setIsLoading] = useState(true);
   
   const [viewMode, setViewMode] = useState<ViewMode>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -229,14 +228,82 @@ export default function App() {
   }, [unpinnedCards, viewMode]);
 
   // --- Effects ---
+useEffect(() => {
+const initializeData = async () => {
+    try {
+    // LocalStorageからの自動マイグレーション
+    const migrationKey = 'poic-migration-completed';
+    const migrationDone = await idbStorage.getItem(migrationKey);
+    
+    if (!migrationDone) {
+        console.log('Migrating from localStorage...');
+        await migrateFromLocalStorage([
+        'poic-cards',
+        'poic-sidebar-state', 
+        'poic-date-format',
+        'dropbox_access_token',
+        'dropbox_refresh_token',
+        'dropbox_expires_at'
+        ]);
+        await idbStorage.setItem(migrationKey, 'true');
+    }
+
+    // IndexedDBからデータ読み込み
+    const saved = await idbStorage.getItem('poic-cards');
+    if (saved) {
+        setCards(JSON.parse(saved));
+    }
+
+    // その他の設定値も読み込み
+    const sidebarState = await idbStorage.getItem('poic-sidebar-state');
+    if (sidebarState !== null) {
+        setIsDesktopSidebarOpen(JSON.parse(sidebarState));
+    }
+
+    const savedFormat = await idbStorage.getItem('poic-date-format');
+    if (savedFormat) {
+        setDateFormat(savedFormat);
+    }
+
+    const dropboxToken = await idbStorage.getItem('dropbox_access_token');
+    if (dropboxToken) {
+        setDropboxToken(dropboxToken);
+    }
+
+    } catch (error) {
+    console.error('Failed to initialize data:', error);
+    } finally {
+    setIsLoading(false);
+    }
+};
+
+initializeData();
+}, []);
+
   useEffect(() => { setIsDropboxConnected(!!dropboxToken); }, [dropboxToken]);
   useEffect(() => { const params = new URLSearchParams(window.location.search); const code = params.get('code'); if (code) { setIsSyncing(true); handleAuthCallback(code).then((token) => { setDropboxToken(token); window.history.replaceState(null, '', window.location.pathname); return syncDownload(token); }).catch(err => { console.error('Auth failed', err); alert('Dropbox認証に失敗しました。'); }).finally(() => setIsSyncing(false)); } else if (isAuthenticated()) { syncDownload(); } }, []);
-  useEffect(() => { localStorage.setItem('poic-cards', JSON.stringify(cards)); }, [cards]);
+  useEffect(() => {
+    if (isLoading) return; // 初期化中はスキップ
+    idbStorage.setItem('poic-cards', JSON.stringify(cards)).catch(err => {
+      console.error('Failed to save cards:', err);
+    });
+  }, [cards, isLoading]);
   useEffect(() => { if (!dropboxToken) return; const timeoutId = setTimeout(() => { syncUpload(dropboxToken, cards); }, 3000); return () => clearTimeout(timeoutId); }, [cards, dropboxToken]);
   useEffect(() => { const handleKeyDown = (e: KeyboardEvent) => { if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return; if (e.key === 'n' && !activeModalCardId) { e.preventDefault(); openNewCardEditor(); } }; window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown); }, [activeModalCardId]);
 
-  const handleDateFormatChange = (format: string) => { setDateFormat(format); localStorage.setItem('poic-date-format', format); };
-  const toggleSidebar = () => { if (window.innerWidth >= 768) { const newState = !isDesktopSidebarOpen; setIsDesktopSidebarOpen(newState); localStorage.setItem('poic-sidebar-state', JSON.stringify(newState)); } else { setIsSidebarOpen(!isSidebarOpen); } };
+  const handleDateFormatChange = (format: string) => {
+    setDateFormat(format);
+    idbStorage.setItem('poic-date-format', format);
+  };
+  const toggleSidebar = () => {
+    if (window.innerWidth >= 768) {
+      const newState = !isDesktopSidebarOpen;
+      setIsDesktopSidebarOpen(newState);
+      idbStorage.setItem('poic-sidebar-state', JSON.stringify(newState));
+    } else {
+      setIsSidebarOpen(!isSidebarOpen);
+    }
+  };
   
   // --- Dropbox Helpers ---
   const syncDownload = async (token?: string) => { setIsSyncing(true); try { const remoteCards = await downloadFromDropbox(); if (remoteCards && Array.isArray(remoteCards)) { setCards(prevCards => { const mergedMap = new Map<string, Card>(); prevCards.forEach(c => mergedMap.set(c.id, c)); remoteCards.forEach((rc: Card) => { const local = mergedMap.get(rc.id); if (!local || (rc.updatedAt > local.updatedAt)) { mergedMap.set(rc.id, rc); } }); return Array.from(mergedMap.values()); }); } } catch (error) { console.error('Dropbox Sync Error:', error); if (error instanceof Error && (error.message.includes('Unauthorized') || error.message.includes('401'))) { handleDisconnectDropbox(); } } finally { setIsSyncing(false); } };
@@ -417,6 +484,17 @@ export default function App() {
     : sidePanelOpen
       ? "grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4" 
       : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4";
+
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-stone-200">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-stone-800 mx-auto mb-4"></div>
+          <p className="text-stone-600 font-medium">読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex font-sans text-ink bg-stone-200 overflow-hidden">
