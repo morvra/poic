@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardType, ViewMode, PoicStats } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern, cleanupDeletedCards } from './utils';
-import { uploadToDropbox, downloadFromDropbox, isAuthenticated, logout, initiateAuth, handleAuthCallback, uploadDeltaToDropbox, downloadDeltaFromDropbox, downloadMetadataFromDropbox, uploadFullDataToDropbox } from './utils/dropbox';
+import { uploadToDropbox, downloadFromDropbox, isAuthenticated, logout, initiateAuth, handleAuthCallback } from './utils/dropbox';
 import type { SyncMetadata } from './types';
 import { idbStorage, migrateFromLocalStorage } from './utils/indexedDB';
 import { CardItem } from './components/CardItem';
@@ -96,7 +96,6 @@ export default function App() {
     lastSyncTime: 0,
     localChanges: []
   });
-  const [isInitialSync, setIsInitialSync] = useState(true);
 
   // --- Memos ---
   const getCardData = (id: string | null): Card | undefined => {
@@ -313,41 +312,28 @@ initializeData();
         const cleanedCards = cleanupDeletedCards(cards, 30);
         if (cleanedCards.length !== cards.length) {
           setCards(cleanedCards);
-          return; // 次のサイクルでアップロード
-        }
-
-        // 初回は全データ同期
-        if (isInitialSync) {
-          await uploadFullDataToDropbox(cleanedCards);
-          setIsInitialSync(false);
-          setSyncMetadata({
-            lastSyncTime: Date.now(),
-            localChanges: []
-          });
           return;
         }
 
-        // 差分同期：変更されたカードのみ
-        if (syncMetadata.localChanges.length > 0) {
-          const changedCards = cleanedCards.filter(c => 
-            syncMetadata.localChanges.includes(c.id)
-          );
+        // 差分同期は一旦無効化して、フル同期を使用
+        await uploadToDropbox(cleanedCards);
         
-          const newMetadata: SyncMetadata = {
-            lastSyncTime: Date.now(),
-            localChanges: []
-          };
-        
-          await uploadDeltaToDropbox(changedCards, newMetadata);
-          setSyncMetadata(newMetadata);
-        }
+        // 同期完了後、localChangesをクリア
+        setSyncMetadata(prev => ({
+          ...prev,
+          lastSyncTime: Date.now(),
+          localChanges: []
+        }));
       } catch (error) {
         console.error('Sync error:', error);
+        if (error instanceof Error && (error.message.includes('Token refresh failed') || error.message.includes('Unauthorized'))) {
+          handleDisconnectDropbox();
+        }
       }
-    }, 10000); 
+    }, 3000); // 3秒
 
     return () => clearTimeout(timeoutId); 
-  }, [cards, dropboxToken, isLoading, isInitialSync, syncMetadata]);
+  }, [cards, dropboxToken, isLoading]);
   useEffect(() => { 
     const handleKeyDown = (e: KeyboardEvent) => { 
       // エディターやサイドバーが開いている時、入力フィールドにフォーカスがある時はスキップ
@@ -400,48 +386,31 @@ initializeData();
   const syncDownload = async (token?: string) => { 
     setIsSyncing(true); 
     try {
-      // 初回はフル同期
-      if (isInitialSync) {
-        const remoteCards = await downloadFromDropbox();
-        if (remoteCards && Array.isArray(remoteCards)) {
-          setCards(remoteCards);
-        }
-        setIsInitialSync(false);
-        setSyncMetadata({
-          lastSyncTime: Date.now(),
-          localChanges: []
-        });
-        return;
-      }
-
-      // 差分同期
-      const [deltaData, remoteMetadata] = await Promise.all([
-        downloadDeltaFromDropbox(),
-        downloadMetadataFromDropbox()
-      ]);
-
-      if (deltaData && deltaData.changes.length > 0) {
+      // フル同期を使用
+      const remoteCards = await downloadFromDropbox();
+      if (remoteCards && Array.isArray(remoteCards)) {
         setCards(prevCards => {
           const mergedMap = new Map<string, Card>();
-        
+          
           // 既存カードをマップに
           prevCards.forEach(c => mergedMap.set(c.id, c));
-        
-          // 変更分をマージ（updatedAtが新しい方を優先）
-          deltaData.changes.forEach(rc => {
+          
+          // リモートのカードをマージ（updatedAtが新しい方を優先）
+          remoteCards.forEach((rc: Card) => {
             const local = mergedMap.get(rc.id);
             if (!local || rc.updatedAt > local.updatedAt) {
               mergedMap.set(rc.id, rc);
             }
           });
-        
+          
           return Array.from(mergedMap.values());
         });
-
-        if (remoteMetadata) {
-          setSyncMetadata(remoteMetadata);
-        }
       }
+      
+      setSyncMetadata({
+        lastSyncTime: Date.now(),
+        localChanges: []
+      });
     } catch (error) { 
       console.error('Dropbox Sync Error:', error); 
       if (error instanceof Error && (error.message.includes('Unauthorized') || error.message.includes('401'))) { 
@@ -538,13 +507,14 @@ initializeData();
     const currentId = cardData.id; 
     if (!currentId) return;
 
+    let actualSavedId = currentId; // 実際に保存されたID
+
     if (phantomCards.has(currentId)) {
         const existingIndex = cards.findIndex(c => c.id === currentId);
-        let finalId = currentId;
 
         if (existingIndex === -1) {
              const newId = generateId();
-             finalId = newId;
+             actualSavedId = newId; // 新しいIDを記録
              const newCard: Card = {
                 id: newId,
                 type: cardData.type || CardType.Record,
@@ -582,7 +552,7 @@ initializeData();
                     return {
                         ...c,
                         body: c.body.replace(oldTitleRegex, newLink),
-                        updatedAt: Date.now() // 内容が変わったので更新日時も更新
+                        updatedAt: Date.now()
                     };
                 }
                 return c;
@@ -591,9 +561,11 @@ initializeData();
             setCards(cards.map(c => c.id === currentId ? { ...c, ...cardData, updatedAt: Date.now() } as Card : c));
         }
     }
+    
+    // 実際に保存されたIDをlocalChangesに追加
     setSyncMetadata(prev => ({
       ...prev,
-      localChanges: [...new Set([...prev.localChanges, currentId])]
+      localChanges: [...new Set([...prev.localChanges, actualSavedId])]
     }));
   };
 
