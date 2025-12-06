@@ -368,23 +368,28 @@ export const Editor: React.FC<EditorProps> = ({
   };
 
   const handleViewModeClick = (e: React.MouseEvent<HTMLDivElement>) => {
-      let offset = body.length;
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0 && readViewRef.current) {
-          const range = selection.getRangeAt(0);
-          if (readViewRef.current.contains(range.startContainer)) {
-               const preCaretRange = range.cloneRange();
-               preCaretRange.selectNodeContents(readViewRef.current);
-               preCaretRange.setEnd(range.startContainer, range.startOffset);
-               offset = preCaretRange.toString().length;
-          }
-      }
-      if (containerRef.current) {
-          savedScrollTop.current = containerRef.current.scrollTop;
-      }
-      setInitialCursorOffset(offset); 
-      setIsEditingBody(true);
-      isMouseDownRef.current = false; 
+    // 文字選択中の場合は編集モードに切り替えない
+    const selection = window.getSelection();
+    if (selection && selection.toString().length > 0) {
+        return; // 選択中は何もしない
+    }
+
+    let offset = body.length;
+    if (selection && selection.rangeCount > 0 && readViewRef.current) {
+        const range = selection.getRangeAt(0);
+        if (readViewRef.current.contains(range.startContainer)) {
+             const preCaretRange = range.cloneRange();
+             preCaretRange.selectNodeContents(readViewRef.current);
+             preCaretRange.setEnd(range.startContainer, range.startOffset);
+             offset = preCaretRange.toString().length;
+        }
+    }
+    if (containerRef.current) {
+        savedScrollTop.current = containerRef.current.scrollTop;
+    }
+    setInitialCursorOffset(offset); 
+    setIsEditingBody(true);
+    isMouseDownRef.current = false; 
   };
 
   const handleDeleteClick = () => {
