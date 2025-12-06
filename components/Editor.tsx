@@ -63,7 +63,7 @@ export const Editor: React.FC<EditorProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
-  const titleInputRef = useRef<HTMLInputElement>(null);
+  const titleInputRef = useRef<HTMLTextAreaElement>(null);
   const readViewRef = useRef<HTMLDivElement>(null);
   const stackInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -98,6 +98,14 @@ export const Editor: React.FC<EditorProps> = ({
           }, 50);
       }
   }, [initialCard]);
+
+  // Adjust title height on change
+  useEffect(() => {
+      if (titleInputRef.current) {
+          titleInputRef.current.style.height = 'auto';
+          titleInputRef.current.style.height = `${titleInputRef.current.scrollHeight}px`;
+      }
+  }, [title]);
 
   useEffect(() => {
       if (isEditingBody && bodyRef.current) {
@@ -501,14 +509,17 @@ export const Editor: React.FC<EditorProps> = ({
         </div>
 
         {/* Title & Complete Toggle */}
-        <div className="flex items-center gap-4 mb-4">
-            <input
+        <div className="flex items-start gap-4 mb-4">
+            <textarea
                 ref={titleInputRef}
-                type="text"
                 placeholder="タイトルなし"
-                className={`flex-1 min-w-0 text-xl sm:text-2xl font-bold font-sans text-ink placeholder-stone-300 border-none focus:outline-none bg-transparent p-0 ${completed ? 'text-stone-400' : ''}`}
+                className={`flex-1 min-w-0 text-xl sm:text-2xl font-bold font-sans text-ink placeholder-stone-300 border-none focus:outline-none bg-transparent p-0 resize-none overflow-hidden ${completed ? 'text-stone-400' : ''}`}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.preventDefault();
+                }}
+                rows={1}
                 autoFocus={!initialCard?.id && !initialCard?.title}
             />
             {type === CardType.GTD && (
