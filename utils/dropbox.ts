@@ -311,23 +311,10 @@ const sanitizeFilename = (filename: string): string => {
 
 /**
  * CardからDropboxファイルパスを生成
- * 日本語タイトルの場合はIDを使用し、英数字のみの場合はタイトルを使用
  */
 const getCardFilePath = (card: Card): string => {
-  const title = card.title || 'untitled';
-  
-  // ASCII文字のみかチェック
-  const isAsciiOnly = /^[\x00-\x7F]*$/.test(title);
-  
-  let filename: string;
-  if (isAsciiOnly) {
-    // ASCII文字のみの場合はタイトルを使用
-    const safeTitle = sanitizeFilename(title);
-    filename = `${safeTitle}.md`;
-  } else {
-    // 日本語などが含まれる場合はIDを使用してタイトルをメタデータで管理
-    filename = `${card.id}.md`;
-  }
+  const safeTitle = sanitizeFilename(card.title || 'untitled');
+  const filename = `${safeTitle}.md`;
   
   if (!CARDS_FOLDER || CARDS_FOLDER === '') {
     return `/${filename}`;
@@ -371,6 +358,20 @@ const ensureFolder = async (token: string, folderPath: string): Promise<void> =>
 };
 
 /**
+ * Dropbox APIヘッダー用にJSON文字列をエンコード
+ */
+const encodeDropboxApiArg = (obj: any): string => {
+  const json = JSON.stringify(obj);
+  const encoder = new TextEncoder();
+  const utf8Bytes = encoder.encode(json);
+  let result = '';
+  for (let i = 0; i < utf8Bytes.length; i++) {
+    result += String.fromCharCode(utf8Bytes[i]);
+  }
+  return result;
+};
+
+/**
  * 単一カードをDropboxにアップロード
  */
 export const uploadCardToDropbox = async (card: Card): Promise<void> => {
@@ -382,23 +383,19 @@ export const uploadCardToDropbox = async (card: Card): Promise<void> => {
   const markdown = cardToMarkdown(card);
   const filePath = getCardFilePath(card);
 
-  // Dropbox-API-Argヘッダーは ASCII 文字のみを受け付けるため、
-  // 日本語などの非ASCII文字を含むパスの場合、エンコードが必要
-  const apiArg = JSON.stringify({
-    path: filePath,
-    mode: 'overwrite',
-    autorename: false,
-    mute: true,
-  });
-
   const response = await fetch('https://content.dropboxapi.com/2/files/upload', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/octet-stream',
-      'Dropbox-API-Arg': apiArg,
+      'Dropbox-API-Arg': encodeDropboxApiArg({
+        path: filePath,
+        mode: 'overwrite',
+        autorename: false,
+        mute: true,
+      }),
     },
-    body: new TextEncoder().encode(markdown), // UTF-8でエンコード
+    body: markdown,
   });
 
   if (!response.ok) {
@@ -436,9 +433,7 @@ const downloadCardFromDropbox = async (token: string, filePath: string, serverMo
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Dropbox-API-Arg': JSON.stringify({
-          path: filePath,
-        }),
+        'Dropbox-API-Arg': encodeDropboxApiArg({ path: filePath }),
       },
     });
 
@@ -482,7 +477,6 @@ const downloadCardFromDropbox = async (token: string, filePath: string, serverMo
     
     if (card && fileModifiedTime) {
       // Dropboxのファイル更新時刻をカードのupdatedAtとして使用
-      // フロントマターのupdatedよりもDropboxのファイル更新時刻を優先
       const frontmatterUpdated = card.updatedAt;
       
       // Dropboxで編集された可能性がある場合は、ファイルの更新時刻を使用
@@ -601,6 +595,8 @@ export const deleteCardFromDropbox = async (card: Card): Promise<void> => {
       // 409 = file not found は無視
       const errorText = await response.text();
       console.warn(`Failed to delete card ${card.id}:`, errorText);
+    } else {
+      console.log('Successfully deleted:', card.title);
     }
   } catch (error) {
     console.error(`Error deleting card ${card.id}:`, error);
