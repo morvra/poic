@@ -931,179 +931,176 @@ export default function App() {
         </div>
       </aside>
 
-      <div className="flex-1 flex overflow-hidden relative flex-col">
-          {/* ヘッダーを最上部に固定（モーダルが開いている時はblur） */}
-          <header className={`flex-shrink-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 border-b border-stone-300/30 ${activeModalCard ? 'blur-sm pointer-events-none select-none' : ''}`}>
-              <div className="flex items-center gap-3 flex-1">
-                  <button 
-                      onClick={toggleSidebar} 
-                      className="text-stone-600 hover:bg-stone-300 p-2 rounded-md transition-colors"
-                  >
-                      <Menu size={20} />
-                  </button>
-                  
-                  <button 
-                      onClick={handleHome} 
-                      title="すべて表示" 
-                      className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"
-                  >
-                      <Home size={20} />
-                  </button>
-                  
-                  {/* 同期ボタン - Dropbox接続時のみ表示 */}
-                  {isDropboxConnected && (
+      <div className="flex-1 flex overflow-hidden relative">
+          <div className="flex-1 flex flex-col overflow-hidden">
+              {/* ヘッダーを固定 */}
+              <header className={`flex-shrink-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 border-b border-stone-300/30 ${activeModalCard ? 'blur-sm pointer-events-none select-none' : ''}`}>
+                  <div className="flex items-center gap-3 flex-1">
                       <button 
-                          onClick={(e) => handleManualSync(e.shiftKey)} 
-                          disabled={isSyncing}
-                          title={isSyncing ? '同期中...' : '今すぐ同期 (Shift+クリックでフル同期)'}
-                          className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={toggleSidebar} 
+                          className="text-stone-600 hover:bg-stone-300 p-2 rounded-md transition-colors"
                       >
-                          <RefreshCw size={20} className={isSyncing ? "animate-spin" : ""} />
+                          <Menu size={20} />
                       </button>
-                  )}
-                  
-                  <div className="relative flex-1 max-w-md">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
-                      <input 
-                          type="text" 
-                          placeholder="検索..." 
-                          className="w-full pl-9 pr-4 py-2 bg-white border border-stone-300/50 rounded-full text-sm focus:ring-2 focus:ring-stone-400 focus:border-stone-400 transition-all outline-none shadow-sm" 
-                          value={searchQuery} 
-                          onChange={(e) => setSearchQuery(e.target.value)} 
-                      />
-                      {searchQuery && (
+                      
+                      <button 
+                          onClick={handleHome} 
+                          title="すべて表示" 
+                          className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"
+                      >
+                          <Home size={20} />
+                      </button>
+                      
+                      {isDropboxConnected && (
                           <button 
-                              onClick={() => setSearchQuery('')} 
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs"
+                              onClick={(e) => handleManualSync(e.shiftKey)} 
+                              disabled={isSyncing}
+                              title={isSyncing ? '同期中...' : '今すぐ同期 (Shift+クリックでフル同期)'}
+                              className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                              クリア
+                              <RefreshCw size={20} className={isSyncing ? "animate-spin" : ""} />
                           </button>
+                      )}
+                      
+                      <div className="relative flex-1 max-w-md">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
+                          <input 
+                              type="text" 
+                              placeholder="検索..." 
+                              className="w-full pl-9 pr-4 py-2 bg-white border border-stone-300/50 rounded-full text-sm focus:ring-2 focus:ring-stone-400 focus:border-stone-400 transition-all outline-none shadow-sm" 
+                              value={searchQuery} 
+                              onChange={(e) => setSearchQuery(e.target.value)} 
+                          />
+                          {searchQuery && (
+                              <button 
+                                  onClick={() => setSearchQuery('')} 
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs"
+                              >
+                                  クリア
+                              </button>
+                          )}
+                      </div>
+                      
+                      {viewMode === 'GTD' && (
+                          <div className="hidden sm:flex items-center gap-2 text-xs text-stone-500 bg-white px-3 py-1.5 rounded-full border border-stone-200 shadow-sm">
+                              <Filter size={12} />
+                              <span>並び順: 期限</span>
+                          </div>
                       )}
                   </div>
                   
-                  {viewMode === 'GTD' && (
-                      <div className="hidden sm:flex items-center gap-2 text-xs text-stone-500 bg-white px-3 py-1.5 rounded-full border border-stone-200 shadow-sm">
-                          <Filter size={12} />
-                          <span>並び順: 期限</span>
-                      </div>
-                  )}
-              </div>
-              
-              <div className="ml-4 flex items-center gap-2">
-                  <button 
-                      onClick={handleRandomCard} 
-                      title="ランダムにカードを表示" 
-                      className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"
-                  >
-                      <Shuffle size={20} />
-                  </button>
-                  
-                  <button 
-                      onClick={handleToggleSelection} 
-                      title={isSelectionMode ? "選択モードを終了" : "複数選択"} 
-                      className={`p-2 rounded-full transition-colors ${isSelectionMode ? 'bg-stone-800 text-white' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'}`}
-                  >
-                      <SelectIcon size={20} />
-                  </button>
-                  
-                  {isSelectionMode && (
+                  <div className="ml-4 flex items-center gap-2">
                       <button 
-                          onClick={handleSelectAll} 
-                          title="表示中のカードをすべて選択" 
-                          className={`p-2 rounded-full transition-colors ${filteredCards.length > 0 && filteredCards.every(c => selectedCardIds.has(c.id)) ? 'bg-blue-100 text-blue-600' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'}`}
+                          onClick={handleRandomCard} 
+                          title="ランダムにカードを表示" 
+                          className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"
                       >
-                          <CheckCheck size={20} />
+                          <Shuffle size={20} />
                       </button>
-                  )}
-                  
-                  {isSelectionMode && selectedCardIds.size > 0 && (
-                      <>
+                      
+                      <button 
+                          onClick={handleToggleSelection} 
+                          title={isSelectionMode ? "選択モードを終了" : "複数選択"} 
+                          className={`p-2 rounded-full transition-colors ${isSelectionMode ? 'bg-stone-800 text-white' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'}`}
+                      >
+                          <SelectIcon size={20} />
+                      </button>
+                      
+                      {isSelectionMode && (
                           <button 
-                              onClick={() => setShowBatchTagModal(true)} 
-                              title="タグの管理" 
-                              className="bg-stone-800 hover:bg-stone-900 text-white p-2 rounded-full shadow-lg transition-colors flex items-center gap-2"
+                              onClick={handleSelectAll} 
+                              title="表示中のカードをすべて選択" 
+                              className={`p-2 rounded-full transition-colors ${filteredCards.length > 0 && filteredCards.every(c => selectedCardIds.has(c.id)) ? 'bg-blue-100 text-blue-600' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'}`}
                           >
-                              <Tag size={20} />
+                              <CheckCheck size={20} />
                           </button>
-                          
-                          <button 
-                              onClick={handleClickDeleteSelected} 
-                              title={`${selectedCardIds.size}枚のカードを削除`} 
-                              className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full shadow-lg transition-colors flex items-center gap-2"
-                          >
-                              <Trash2 size={20} />
-                              <span className="text-xs font-bold hidden sm:inline">{selectedCardIds.size}</span>
-                          </button>
-                      </>
-                  )}
-              </div>
-          </header>
-          
-          {/* メインスクロールエリアとサイドパネルのコンテナ */}
-          <div className="flex-1 flex overflow-hidden relative min-h-0">
-              {/* メインスクロールエリア */}
-              <main 
-                  className="flex-1 overflow-y-auto bg-stone-200 relative"
-                  style={{ 
-                      WebkitOverflowScrolling: 'touch',
-                      height: '100%',
-                      overflowY: 'scroll'
-                  }}
-              >
-                  <div className={activeModalCard ? 'blur-sm pointer-events-none select-none' : ''}>
-                      <div className="px-2 sm:px-6 w-full max-w-[1920px] mx-auto pb-20 pt-4">
-                          <div className="mb-4 flex items-center justify-between pl-2 border-l-4 border-stone-400">
-                              <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">{viewMode === 'All' && (searchQuery ? `検索: "${searchQuery}"` : 'Dock (全カード)')}{viewMode === 'Stack' && `タグ: ${activeStack}`}{viewMode === 'Type' && `分類: ${activeType}`}{viewMode === 'GTD' && 'アクション'}</h2>
-                              <div className="flex items-center gap-2"><button onClick={handleExportOPML} title="OPMLをコピー" className="flex items-center gap-1 text-xs font-mono text-stone-500 hover:text-stone-800 bg-stone-300/30 hover:bg-stone-300/60 px-2 py-1 rounded transition-colors"><Copy size={12} /><span className="hidden sm:inline">OPML</span></button><span className="text-xs font-mono text-stone-500 bg-stone-300/50 px-2 py-1 rounded">{filteredCards.length} cards</span></div>
-                          </div>
+                      )}
+                      
+                      {isSelectionMode && selectedCardIds.size > 0 && (
+                          <>
+                              <button 
+                                  onClick={() => setShowBatchTagModal(true)} 
+                                  title="タグの管理" 
+                                  className="bg-stone-800 hover:bg-stone-900 text-white p-2 rounded-full shadow-lg transition-colors flex items-center gap-2"
+                              >
+                                  <Tag size={20} />
+                              </button>
+                              
+                              <button 
+                                  onClick={handleClickDeleteSelected} 
+                                  title={`${selectedCardIds.size}枚のカードを削除`} 
+                                  className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full shadow-lg transition-colors flex items-center gap-2"
+                              >
+                                  <Trash2 size={20} />
+                                  <span className="text-xs font-bold hidden sm:inline">{selectedCardIds.size}</span>
+                              </button>
+                          </>
+                      )}
+                  </div>
+              </header>
+              
+              {/* メインスクロールエリア - 最もシンプルな構造 */}
+              <div className="flex-1 flex overflow-hidden">
+                  <div 
+                      className="flex-1 overflow-y-scroll bg-stone-200"
+                      style={{ 
+                          WebkitOverflowScrolling: 'touch'
+                      }}
+                  >
+                      <div className={activeModalCard ? 'blur-sm pointer-events-none select-none' : ''}>
+                          <div className="px-2 sm:px-6 w-full max-w-[1920px] mx-auto pb-20 pt-4">
+                              <div className="mb-4 flex items-center justify-between pl-2 border-l-4 border-stone-400">
+                                  <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">{viewMode === 'All' && (searchQuery ? `検索: "${searchQuery}"` : 'Dock (全カード)')}{viewMode === 'Stack' && `タグ: ${activeStack}`}{viewMode === 'Type' && `分類: ${activeType}`}{viewMode === 'GTD' && 'アクション'}</h2>
+                                  <div className="flex items-center gap-2"><button onClick={handleExportOPML} title="OPMLをコピー" className="flex items-center gap-1 text-xs font-mono text-stone-500 hover:text-stone-800 bg-stone-300/30 hover:bg-stone-300/60 px-2 py-1 rounded transition-colors"><Copy size={12} /><span className="hidden sm:inline">OPML</span></button><span className="text-xs font-mono text-stone-500 bg-stone-300/50 px-2 py-1 rounded">{filteredCards.length} cards</span></div>
+                              </div>
 
-                          <div className={viewMode === 'GTD' ? '' : gridClasses}>
-                              {pinnedCards.length > 0 && (<><div className="col-span-full flex items-center gap-2 mb-2"><Pin size={16} className="text-stone-400" /><span className="text-xs font-bold text-stone-400 uppercase tracking-wider">Pinned</span><div className="h-px flex-1 bg-stone-300/50"></div></div>{pinnedCards.map(card => (<CardItem key={card.id} domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} />))}<div className="col-span-full h-4"></div></>)}
+                              <div className={viewMode === 'GTD' ? '' : gridClasses}>
+                                  {pinnedCards.length > 0 && (<><div className="col-span-full flex items-center gap-2 mb-2"><Pin size={16} className="text-stone-400" /><span className="text-xs font-bold text-stone-400 uppercase tracking-wider">Pinned</span><div className="h-px flex-1 bg-stone-300/50"></div></div>{pinnedCards.map(card => (<CardItem key={card.id} domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} />))}<div className="col-span-full h-4"></div></>)}
 
-                              {viewMode === 'GTD' && gtdGroups ? (
-                                  <div className="col-span-full space-y-6">{(Object.entries(gtdGroups) as [string, Card[]][]).map(([groupName, groupCards]) => (groupCards.length > 0 && (<div key={groupName}><h3 className={`text-xs font-bold uppercase tracking-wider mb-2 pl-2 border-l-2 ${groupName === '期限切れ' ? 'border-red-500 text-red-500' : groupName === '今日' ? 'border-green-500 text-green-600' : 'border-stone-400 text-stone-500'}`}>{groupName}</h3><div className={gridClasses + " items-start"}> {groupCards.map((card) => (<CardItem key={card.id} domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} />))}</div></div>)))}</div>
-                              ) : (
-                                  <>
-                                      {unpinnedCards.map((card, index) => {
-                                          const prevCard = unpinnedCards[index - 1];
-                                          const currentMonth = new Date(card.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' });
-                                          const prevMonth = prevCard ? new Date(prevCard.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' }) : null;
-                                          const showDivider = index > 0 && currentMonth !== prevMonth;
-                                          return (<React.Fragment key={card.id}>{showDivider && (<div className="col-span-full flex items-center gap-2 my-4 px-2 opacity-60"><div className="h-px flex-1 bg-stone-300"></div><span className="text-xs font-mono font-bold text-stone-500">{currentMonth}</span><div className="h-px flex-1 bg-stone-300"></div></div>)}<CardItem domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} /></React.Fragment>);
-                                      })}
-                                      {unpinnedCards.length === 0 && (<div className="col-span-full text-center py-20 opacity-50"><Library size={48} className="mx-auto mb-4 text-stone-400" /><p className="text-stone-500 font-serif italic">カードが見つかりません。</p></div>)}
-                                  </>
-                              )}
+                                  {viewMode === 'GTD' && gtdGroups ? (
+                                      <div className="col-span-full space-y-6">{(Object.entries(gtdGroups) as [string, Card[]][]).map(([groupName, groupCards]) => (groupCards.length > 0 && (<div key={groupName}><h3 className={`text-xs font-bold uppercase tracking-wider mb-2 pl-2 border-l-2 ${groupName === '期限切れ' ? 'border-red-500 text-red-500' : groupName === '今日' ? 'border-green-500 text-green-600' : 'border-stone-400 text-stone-500'}`}>{groupName}</h3><div className={gridClasses + " items-start"}> {groupCards.map((card) => (<CardItem key={card.id} domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} />))}</div></div>)))}</div>
+                                  ) : (
+                                      <>
+                                          {unpinnedCards.map((card, index) => {
+                                              const prevCard = unpinnedCards[index - 1];
+                                              const currentMonth = new Date(card.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' });
+                                              const prevMonth = prevCard ? new Date(prevCard.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' }) : null;
+                                              const showDivider = index > 0 && currentMonth !== prevMonth;
+                                              return (<React.Fragment key={card.id}>{showDivider && (<div className="col-span-full flex items-center gap-2 my-4 px-2 opacity-60"><div className="h-px flex-1 bg-stone-300"></div><span className="text-xs font-mono font-bold text-stone-500">{currentMonth}</span><div className="h-px flex-1 bg-stone-300"></div></div>)}<CardItem domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} /></React.Fragment>);
+                                          })}
+                                          {unpinnedCards.length === 0 && (<div className="col-span-full text-center py-20 opacity-50"><Library size={48} className="mx-auto mb-4 text-stone-400" /><p className="text-stone-500 font-serif italic">カードが見つかりません。</p></div>)}
+                                      </>
+                                  )}
+                              </div>
                           </div>
                       </div>
+                      
+                      {!isSelectionMode && (<button onClick={openNewCardEditor} className="fixed bottom-6 right-6 z-40 bg-stone-800 hover:bg-stone-900 text-white p-4 rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center"><Plus size={24} /></button>)}
                   </div>
-                  
-                  {!isSelectionMode && (<button onClick={openNewCardEditor} className="fixed bottom-6 right-6 z-40 bg-stone-800 hover:bg-stone-900 text-white p-4 rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center"><Plus size={24} /></button>)}
-              </main>
 
-              {activeSideCard && (
-                <aside className="w-full md:w-[500px] md:flex-none border-l border-stone-300 bg-paper shadow-xl z-40 overflow-hidden transition-all duration-200 ease-in-out relative h-full">
-                    <div className="h-full">
-                        <Editor 
-                            initialCard={activeSideCard}
-                            allTitles={allTitles}
-                            availableStacks={allStacks.map(s => s.name)}
-                            dateFormat={dateFormat}
-                            onSave={(data, close) => {
-                                handleSaveCard(data);
-                                if (close) handleCloseSide();
-                            }}
-                            onCancel={handleCloseSide}
-                            onDelete={() => handleDeleteCard(activeSideCard.id)}
-                            onNavigate={(term, e) => handleLinkClick(term, e)} 
-                            backlinks={sideBacklinks}
-                        />
-                    </div>
-                </aside>
-              )}
+                  {activeSideCard && (
+                    <aside className="w-full md:w-[500px] md:flex-none border-l border-stone-300 bg-paper shadow-xl z-40 overflow-hidden transition-all duration-200 ease-in-out relative h-full">
+                        <div className="h-full">
+                            <Editor 
+                                initialCard={activeSideCard}
+                                allTitles={allTitles}
+                                availableStacks={allStacks.map(s => s.name)}
+                                dateFormat={dateFormat}
+                                onSave={(data, close) => {
+                                    handleSaveCard(data);
+                                    if (close) handleCloseSide();
+                                }}
+                                onCancel={handleCloseSide}
+                                onDelete={() => handleDeleteCard(activeSideCard.id)}
+                                onNavigate={(term, e) => handleLinkClick(term, e)} 
+                                backlinks={sideBacklinks}
+                            />
+                        </div>
+                    </aside>
+                  )}
+              </div>
           </div>
           
-          {/* モーダル（ヘッダーの上に表示） */}
           {activeModalCard && (
               <div 
                   className={`fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 bg-stone-900/20 backdrop-blur-[1px] animate-in fade-in duration-200`}
