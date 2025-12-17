@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardType, ViewMode, PoicStats } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern, cleanupDeletedCards } from './utils';
-import { uploadToDropbox, downloadFromDropbox, isAuthenticated, logout, initiateAuth, handleAuthCallback, uploadCardToDropbox, deleteCardFromDropbox } from './utils/dropbox';
+import { uploadToDropbox, downloadFromDropbox, isAuthenticated, isAuthenticatedAsync, logout, initiateAuth, handleAuthCallback, uploadCardToDropbox, deleteCardFromDropbox } from './utils/dropbox';
 import type { SyncMetadata } from './types';
 import { idbStorage, migrateFromLocalStorage } from './utils/indexedDB';
 import { CardItem } from './components/CardItem';
@@ -243,60 +243,103 @@ export default function App() {
   }, [unpinnedCards, viewMode]);
 
   // --- Effects ---
-useEffect(() => {
-const initializeData = async () => {
-    try {
-    // LocalStorageからの自動マイグレーション
-    const migrationKey = 'poic-migration-completed';
-    const migrationDone = await idbStorage.getItem(migrationKey);
+  useEffect(() => {
+  const initializeData = async () => {
+      try {
+      // LocalStorageからの自動マイグレーション
+      const migrationKey = 'poic-migration-completed';
+      const migrationDone = await idbStorage.getItem(migrationKey);
+      
+      if (!migrationDone) {
+          console.log('Migrating from localStorage...');
+          await migrateFromLocalStorage([
+          'poic-cards',
+          'poic-sidebar-state', 
+          'poic-date-format',
+          'dropbox_access_token',
+          'dropbox_refresh_token',
+          'dropbox_expires_at'
+          ]);
+          await idbStorage.setItem(migrationKey, 'true');
+      }
+
+      // IndexedDBからデータ読み込み
+      const saved = await idbStorage.getItem('poic-cards');
+      if (saved) {
+          setCards(JSON.parse(saved));
+      }
+
+      // その他の設定値も読み込み
+      const sidebarState = await idbStorage.getItem('poic-sidebar-state');
+      if (sidebarState !== null) {
+          setIsDesktopSidebarOpen(JSON.parse(sidebarState));
+      }
+
+      const savedFormat = await idbStorage.getItem('poic-date-format');
+      if (savedFormat) {
+          setDateFormat(savedFormat);
+      }
+
+      const dropboxToken = await idbStorage.getItem('dropbox_access_token');
+      if (dropboxToken) {
+          setDropboxToken(dropboxToken);
+      }
+
+      } catch (error) {
+      console.error('Failed to initialize data:', error);
+      } finally {
+      setIsLoading(false);
+      }
+  };
+
+  initializeData();
+  }, []);
+
+  useEffect(() => { 
+    setIsDropboxConnected(!!dropboxToken); 
+  }, [dropboxToken]);
+
+  useEffect(() => { 
+    const initDropbox = async () => {
+      const params = new URLSearchParams(window.location.search); 
+      const code = params.get('code'); 
+      
+      if (code) { 
+        setIsSyncing(true); 
+        try {
+          const token = await handleAuthCallback(code);
+          setDropboxToken(token); 
+          window.history.replaceState(null, '', window.location.pathname); 
+          
+          // 初回同期: ローカルのカードをアップロードしてからダウンロード
+          console.log('Initial sync: uploading local cards...');
+          const localCards = cards.filter(c => !c.isDeleted);
+          if (localCards.length > 0) {
+            await uploadToDropbox(localCards);
+          }
+          
+          await syncDownload(token);
+        } catch (err) {
+          console.error('Auth failed', err); 
+          alert('Dropbox認証に失敗しました。'); 
+        } finally {
+          setIsSyncing(false);
+        }
+      } else {
+        // 認証済みかチェック
+        const authenticated = await isAuthenticatedAsync();
+        if (authenticated) {
+          console.log('Already authenticated, syncing...');
+          await syncDownload();
+        }
+      }
+    };
     
-    if (!migrationDone) {
-        console.log('Migrating from localStorage...');
-        await migrateFromLocalStorage([
-        'poic-cards',
-        'poic-sidebar-state', 
-        'poic-date-format',
-        'dropbox_access_token',
-        'dropbox_refresh_token',
-        'dropbox_expires_at'
-        ]);
-        await idbStorage.setItem(migrationKey, 'true');
+    if (!isLoading) {
+      initDropbox();
     }
+  }, [isLoading]);
 
-    // IndexedDBからデータ読み込み
-    const saved = await idbStorage.getItem('poic-cards');
-    if (saved) {
-        setCards(JSON.parse(saved));
-    }
-
-    // その他の設定値も読み込み
-    const sidebarState = await idbStorage.getItem('poic-sidebar-state');
-    if (sidebarState !== null) {
-        setIsDesktopSidebarOpen(JSON.parse(sidebarState));
-    }
-
-    const savedFormat = await idbStorage.getItem('poic-date-format');
-    if (savedFormat) {
-        setDateFormat(savedFormat);
-    }
-
-    const dropboxToken = await idbStorage.getItem('dropbox_access_token');
-    if (dropboxToken) {
-        setDropboxToken(dropboxToken);
-    }
-
-    } catch (error) {
-    console.error('Failed to initialize data:', error);
-    } finally {
-    setIsLoading(false);
-    }
-};
-
-initializeData();
-}, []);
-
-  useEffect(() => { setIsDropboxConnected(!!dropboxToken); }, [dropboxToken]);
-  useEffect(() => { const params = new URLSearchParams(window.location.search); const code = params.get('code'); if (code) { setIsSyncing(true); handleAuthCallback(code).then((token) => { setDropboxToken(token); window.history.replaceState(null, '', window.location.pathname); return syncDownload(token); }).catch(err => { console.error('Auth failed', err); alert('Dropbox認証に失敗しました。'); }).finally(() => setIsSyncing(false)); } else if (isAuthenticated()) { syncDownload(); } }, []);
   useEffect(() => {
     if (isLoading) return; // 初期化中はスキップ
     idbStorage.setItem('poic-cards', JSON.stringify(cards)).catch(err => {
@@ -308,23 +351,31 @@ initializeData();
 
     const timeoutId = setTimeout(async () => {
       try {
+        console.log('Auto-sync triggered'); // デバッグログ
+        
         // クリーンアップ
         const cleanedCards = cleanupDeletedCards(cards, 30);
         if (cleanedCards.length !== cards.length) {
+          console.log('Cleaned deleted cards');
           setCards(cleanedCards);
           return;
         }
 
         // 変更されたカードのみをアップロード
         if (syncMetadata.localChanges.length > 0) {
+          console.log('Syncing changes:', syncMetadata.localChanges); // デバッグログ
+          
           const changedCards = cleanedCards.filter(c => 
             syncMetadata.localChanges.includes(c.id)
           );
+          
+          console.log('Changed cards to sync:', changedCards.length); // デバッグログ
           
           // 削除されたカードはDropboxからも削除
           const deletedCards = changedCards.filter(c => c.isDeleted);
           for (const card of deletedCards) {
             try {
+              console.log('Deleting card from Dropbox:', card.id, card.title); // デバッグログ
               await deleteCardFromDropbox(card);
             } catch (error) {
               console.error(`Failed to delete card ${card.id} from Dropbox:`, error);
@@ -335,11 +386,14 @@ initializeData();
           const activeCards = changedCards.filter(c => !c.isDeleted);
           for (const card of activeCards) {
             try {
+              console.log('Uploading card to Dropbox:', card.id, card.title); // デバッグログ
               await uploadCardToDropbox(card);
             } catch (error) {
               console.error(`Failed to upload card ${card.id}:`, error);
             }
           }
+          
+          console.log('Sync completed'); // デバッグログ
           
           // 同期完了後、localChangesをクリア
           setSyncMetadata(prev => ({
@@ -357,7 +411,7 @@ initializeData();
     }, 3000);
 
     return () => clearTimeout(timeoutId); 
-  }, [cards, dropboxToken, isLoading, syncMetadata.localChanges]);
+  }, [cards, dropboxToken, isLoading]);
   useEffect(() => { 
     const handleKeyDown = (e: KeyboardEvent) => { 
       // エディターやサイドバーが開いている時、入力フィールドにフォーカスがある時はスキップ

@@ -447,7 +447,8 @@ export const downloadFromDropbox = async (): Promise<Card[]> => {
   if (!token) throw new Error('Unauthorized');
 
   try {
-    // フォルダ内のファイル一覧を取得
+    console.log('Downloading from Dropbox...'); // デバッグログ
+    
     // 空文字列の場合はルートディレクトリを指定
     const folderPath = CARDS_FOLDER || '';
     
@@ -463,22 +464,31 @@ export const downloadFromDropbox = async (): Promise<Card[]> => {
       }),
     });
 
+    console.log('List response status:', listResponse.status); // デバッグログ
+
     if (!listResponse.ok) {
       if (listResponse.status === 409) {
-        console.log('Cards folder does not exist yet');
+        console.log('Root directory is empty or inaccessible');
         return [];
       }
-      throw new Error('Failed to list cards folder');
+      const errorText = await listResponse.text();
+      console.error('List folder error:', errorText); // デバッグログ
+      throw new Error('Failed to list root directory');
     }
 
     const listData = await listResponse.json();
     const entries = listData.entries || [];
+    
+    console.log('Found entries:', entries.length); // デバッグログ
 
     // Markdownファイルのみをフィルタ
     const markdownFiles = entries.filter((entry: any) => 
       entry['.tag'] === 'file' && 
       entry.name.endsWith('.md')
     );
+    
+    console.log('Markdown files found:', markdownFiles.length); // デバッグログ
+    console.log('Files:', markdownFiles.map((f: any) => f.name)); // デバッグログ
 
     // 各ファイルをダウンロード（並列処理）
     const batchSize = 5;
@@ -493,6 +503,7 @@ export const downloadFromDropbox = async (): Promise<Card[]> => {
       cards.push(...batchResults.filter((card): card is Card => card !== null));
     }
 
+    console.log('Downloaded cards:', cards.length); // デバッグログ
     return cards;
   } catch (error) {
     console.error('Error downloading from Dropbox:', error);
@@ -531,7 +542,13 @@ export const deleteCardFromDropbox = async (card: Card): Promise<void> => {
   }
 };
 
-export const isAuthenticated = async (): Promise<boolean> => {
+export const isAuthenticated = (): boolean => {
+  // 同期的にチェック（localStorage経由で確認）
+  return !!localStorage.getItem('dropbox_refresh_token');
+};
+
+// 非同期版も残す
+export const isAuthenticatedAsync = async (): Promise<boolean> => {
   const refreshToken = await idbStorage.getItem('dropbox_refresh_token');
   return !!refreshToken;
 };
