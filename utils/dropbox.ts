@@ -2,6 +2,7 @@
 
 import { idbStorage } from './indexedDB';
 import { CardType, type Card } from '../types';
+import { generateId } from '../utils';
 
 const CLIENT_ID = '5hwhw0juzjrs0o0';
 const REDIRECT_URI = window.location.origin + window.location.pathname;
@@ -279,15 +280,10 @@ const markdownToCard = (markdown: string, filename: string): Card | null => {
       cardType = frontmatter.type as CardType;
     }
 
-    // IDの生成（フロントマターにない場合はファイル名から生成）
+    // IDの生成（フロントマターにない場合はgenerateId()を使用）
     let cardId = frontmatter.id;
     if (!cardId) {
-      // ファイル名から生成（拡張子を除く）
-      cardId = filename.replace('.md', '').replace(/[^a-z0-9]/gi, '_');
-      // または新しいIDを生成
-      if (!cardId || cardId.length < 3) {
-        cardId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-      }
+      cardId = generateId();
       console.log(`Generated ID for ${filename}: ${cardId}`);
     }
 
