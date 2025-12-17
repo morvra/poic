@@ -817,6 +817,19 @@ export default function App() {
                     <div className="flex items-center gap-3 flex-1">
                         <button onClick={toggleSidebar} className="text-stone-600 hover:bg-stone-300 p-2 rounded-md transition-colors"><Menu size={20} /></button>
                         <button onClick={handleHome} title="すべて表示" className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"><Home size={20} /></button>
+
+          {/* 同期ボタン */}
+          {isDropboxConnected && (
+              <button 
+                  onClick={handleManualSync} 
+                  disabled={isSyncing}
+                  title={isSyncing ? '同期中...' : '今すぐ同期'}
+                  className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                  <RefreshCw size={20} className={isSyncing ? "animate-spin" : ""} />
+              </button>
+          )}
+
                         <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} /><input type="text" placeholder="検索..." className="w-full pl-9 pr-4 py-2 bg-white border border-stone-300/50 rounded-full text-sm focus:ring-2 focus:ring-stone-400 focus:border-stone-400 transition-all outline-none shadow-sm" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />{searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs">クリア</button>}</div>
                         {viewMode === 'GTD' && <div className="hidden sm:flex items-center gap-2 text-xs text-stone-500 bg-white px-3 py-1.5 rounded-full border border-stone-200 shadow-sm"><Filter size={12} /><span>並び順: 期限</span></div>}
                     </div>
