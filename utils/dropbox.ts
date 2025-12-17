@@ -1,12 +1,11 @@
-// Dropbox API Utilities with PKCE Flow (IndexedDB版)
+// Dropbox API Utilities with PKCE Flow - Markdown Files Version
 
 import { idbStorage } from './indexedDB';
-import type { SyncMetadata, Card } from '../types';
+import { CardType, type Card } from '../types';
 
-
-const CLIENT_ID = '5hwhw0juzjrs0o0'; // Provided App Key
-// redirect_uri must be configured in Dropbox App Console to match the deployed URL
-const REDIRECT_URI = window.location.origin + window.location.pathname; 
+const CLIENT_ID = '5hwhw0juzjrs0o0';
+const REDIRECT_URI = window.location.origin + window.location.pathname;
+const CARDS_FOLDER = '';
 
 // --- PKCE Helpers ---
 
@@ -47,7 +46,6 @@ export const initiateAuth = async () => {
   const hash = await sha256(codeVerifier);
   const codeChallenge = base64UrlEncode(hash);
 
-  // Store code_verifier in IndexedDB to use after redirect
   await idbStorage.setItem('dropbox_code_verifier', codeVerifier);
 
   const url = new URL('https://www.dropbox.com/oauth2/authorize');
@@ -56,8 +54,7 @@ export const initiateAuth = async () => {
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('code_challenge', codeChallenge);
   url.searchParams.set('code_challenge_method', 'S256');
-  // Ensure 'token_access_type' is set to 'offline' to get a refresh token
-  url.searchParams.set('token_access_type', 'offline'); 
+  url.searchParams.set('token_access_type', 'offline');
   
   window.location.href = url.toString();
 };
@@ -90,14 +87,10 @@ export const handleAuthCallback = async (code: string): Promise<string> => {
 
   const data = await response.json();
   
-  // Save tokens to IndexedDB
   await idbStorage.setItem('dropbox_access_token', data.access_token);
   await idbStorage.setItem('dropbox_refresh_token', data.refresh_token);
-  // Calculate expiry time (expires_in is in seconds)
   const expiresAt = Date.now() + (data.expires_in * 1000);
   await idbStorage.setItem('dropbox_expires_at', expiresAt.toString());
-
-  // Clean up
   await idbStorage.removeItem('dropbox_code_verifier');
   
   return data.access_token;
@@ -113,13 +106,12 @@ export const getAccessToken = async (): Promise<string | null> => {
   }
 
   const expiresAt = parseInt(expiresAtStr, 10);
-  // Refresh if expired or expiring soon (within 5 mins)
   if (Date.now() > expiresAt - 5 * 60 * 1000) {
     try {
       accessToken = await refreshAccessToken(refreshToken);
     } catch (e) {
       console.error('Failed to refresh token', e);
-      return null; // Force re-login
+      return null;
     }
   }
 
@@ -147,7 +139,6 @@ const refreshAccessToken = async (refreshToken: string): Promise<string> => {
   const data = await response.json();
   
   await idbStorage.setItem('dropbox_access_token', data.access_token);
-  // Refresh token might be rotated, though usually stays same for Dropbox
   if (data.refresh_token) {
     await idbStorage.setItem('dropbox_refresh_token', data.refresh_token);
   }
@@ -157,203 +148,387 @@ const refreshAccessToken = async (refreshToken: string): Promise<string> => {
   return data.access_token;
 };
 
+// --- Markdown Conversion Functions ---
 
-// --- File Operations (Wrapper to ensure valid token) ---
+/**
+ * CardオブジェクトをMarkdown形式に変換（YAMLフロントマター付き）
+ */
+const cardToMarkdown = (card: Card): string => {
+  const frontmatter: string[] = [
+    '---',
+    `id: ${card.id}`,
+    `title: "${card.title.replace(/"/g, '\\"')}"`,
+    `type: ${card.type}`,
+    `created: ${new Date(card.createdAt).toISOString()}`,
+    `updated: ${new Date(card.updatedAt).toISOString()}`,
+  ];
 
-const FILE_PATH = '/poic_data.json';
+  if (card.stacks && card.stacks.length > 0) {
+    frontmatter.push(`tags:`);
+    card.stacks.forEach(tag => {
+      frontmatter.push(`  - ${tag}`);
+    });
+  }
 
-export const uploadToDropbox = async (data: any) => {
+  if (card.dueDate) {
+    frontmatter.push(`dueDate: ${new Date(card.dueDate).toISOString()}`);
+  }
+
+  if (card.completed !== undefined) {
+    frontmatter.push(`completed: ${card.completed}`);
+  }
+
+  if (card.isPinned) {
+    frontmatter.push(`pinned: ${typeof card.isPinned === 'number' ? new Date(card.isPinned).toISOString() : 'true'}`);
+  }
+
+  if (card.isDeleted) {
+    frontmatter.push(`deleted: true`);
+    if (card.deletedAt) {
+      frontmatter.push(`deletedAt: ${new Date(card.deletedAt).toISOString()}`);
+    }
+  }
+
+  frontmatter.push('---');
+  frontmatter.push('');
+
+  return frontmatter.join('\n') + card.body;
+};
+
+/**
+ * Markdown形式をCardオブジェクトに変換
+ */
+const markdownToCard = (markdown: string, filename: string): Card | null => {
+  // フロントマターの抽出
+  const frontmatterMatch = markdown.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!frontmatterMatch) {
+    console.warn(`Invalid markdown format in ${filename}`);
+    return null;
+  }
+
+  const [, frontmatterText, body] = frontmatterMatch;
+  const frontmatter: Record<string, any> = {};
+
+  // YAMLパース（簡易版）
+  const lines = frontmatterText.split('\n');
+  let currentKey: string | null = null;
+  let currentArray: string[] | null = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // 配列要素の処理
+    if (trimmed.startsWith('- ')) {
+      if (currentArray) {
+        currentArray.push(trimmed.substring(2));
+      }
+      continue;
+    }
+
+    // キー:値の処理
+    const colonIndex = trimmed.indexOf(':');
+    if (colonIndex > 0) {
+      const key = trimmed.substring(0, colonIndex).trim();
+      const value = trimmed.substring(colonIndex + 1).trim();
+
+      if (value === '') {
+        // 配列の開始
+        currentKey = key;
+        currentArray = [];
+        frontmatter[key] = currentArray;
+      } else {
+        // 通常の値
+        currentKey = null;
+        currentArray = null;
+        
+        // 値の型変換
+        if (value === 'true') {
+          frontmatter[key] = true;
+        } else if (value === 'false') {
+          frontmatter[key] = false;
+        } else if (value.startsWith('"') && value.endsWith('"')) {
+          frontmatter[key] = value.slice(1, -1).replace(/\\"/g, '"');
+        } else {
+          frontmatter[key] = value;
+        }
+      }
+    }
+  }
+
+  // Cardオブジェクトの構築
+  try {
+    // typeの妥当性チェック
+    let cardType: CardType = CardType.Record;
+    if (frontmatter.type && Object.values(CardType).includes(frontmatter.type)) {
+      cardType = frontmatter.type as CardType;
+    }
+
+    const card: Card = {
+      id: frontmatter.id || filename.replace('.md', ''),
+      type: cardType,
+      title: frontmatter.title || 'Untitled',
+      body: body.trim(),
+      createdAt: frontmatter.created ? new Date(frontmatter.created).getTime() : Date.now(),
+      updatedAt: frontmatter.updated ? new Date(frontmatter.updated).getTime() : Date.now(),
+      stacks: frontmatter.tags || [],
+      completed: frontmatter.completed || false,
+      isDeleted: frontmatter.deleted || false,
+    };
+
+    if (frontmatter.dueDate) {
+      card.dueDate = new Date(frontmatter.dueDate).getTime();
+    }
+
+    if (frontmatter.deletedAt) {
+      card.deletedAt = new Date(frontmatter.deletedAt).getTime();
+    }
+
+    if (frontmatter.pinned) {
+      if (frontmatter.pinned === 'true') {
+        card.isPinned = true;
+      } else {
+        card.isPinned = new Date(frontmatter.pinned).getTime();
+      }
+    }
+
+    return card;
+  } catch (error) {
+    console.error(`Failed to parse card from ${filename}:`, error);
+    return null;
+  }
+};
+
+/**
+ * ファイル名をサニタイズ（不正な文字を除去）
+ */
+const sanitizeFilename = (filename: string): string => {
+  return filename
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+    .replace(/^\.+/, '_')
+    .substring(0, 200); // 長さ制限
+};
+
+/**
+ * CardからDropboxファイルパスを生成
+ */
+const getCardFilePath = (card: Card): string => {
+  const safeTitle = sanitizeFilename(card.title || 'untitled');
+  const filename = `${safeTitle}.md`;
+  
+  // CARDS_FOLDERが空の場合はルートディレクトリ
+  if (!CARDS_FOLDER || CARDS_FOLDER === '') {
+    return `/${filename}`;
+  }
+  
+  return `${CARDS_FOLDER}/${filename}`;
+};
+
+// --- Dropbox File Operations ---
+
+/**
+ * フォルダを作成（存在しない場合）
+ */
+const ensureFolder = async (token: string, folderPath: string): Promise<void> => {
+  // ルートディレクトリの場合はフォルダ作成不要
+  if (!folderPath || folderPath === '' || folderPath === '/') {
+    return;
+  }
+  
+  try {
+    const response = await fetch('https://api.dropboxapi.com/2/files/create_folder_v2', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        path: folderPath,
+        autorename: false,
+      }),
+    });
+
+    if (!response.ok && response.status !== 409) {
+      // 409 = already exists は無視
+      const errorText = await response.text();
+      console.error('Failed to create folder:', errorText);
+    }
+  } catch (error) {
+    console.error('Error creating folder:', error);
+  }
+};
+
+/**
+ * 単一カードをDropboxにアップロード
+ */
+export const uploadCardToDropbox = async (card: Card): Promise<void> => {
   const token = await getAccessToken();
   if (!token) throw new Error('Unauthorized');
 
-  const fileContent = JSON.stringify(data);
-  
+  await ensureFolder(token, CARDS_FOLDER);
+
+  const markdown = cardToMarkdown(card);
+  const filePath = getCardFilePath(card);
+
   const response = await fetch('https://content.dropboxapi.com/2/files/upload', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/octet-stream',
       'Dropbox-API-Arg': JSON.stringify({
-        path: FILE_PATH,
-        mode: 'overwrite', 
+        path: filePath,
+        mode: 'overwrite', // 'add' に変更すると重複時にエラー、'autorename: true' で自動リネーム
         autorename: false,
         mute: true,
-        strict_conflict: false
-      })
+      }),
     },
-    body: fileContent
+    body: markdown,
   });
-
-  if (!response.ok) {
-    // Handle 401 specifically in UI layer usually, but throw here
-    const errorText = await response.text();
-    throw new Error(`Dropbox Upload Failed: ${response.status} ${errorText}`);
-  }
-  
-  return await response.json();
-};
-
-export const downloadFromDropbox = async (): Promise<any | null> => {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Unauthorized');
-
-  const response = await fetch('https://content.dropboxapi.com/2/files/download', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Dropbox-API-Arg': JSON.stringify({
-        path: FILE_PATH
-      })
-    }
-  });
-
-  if (response.status === 409) {
-    console.log('File not found in Dropbox.');
-    return null;
-  }
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Dropbox Download Failed: ${response.status} ${errorText}`);
+    throw new Error(`Failed to upload card ${card.id}: ${errorText}`);
   }
-
-  return await response.json();
 };
 
-// 差分同期用のファイルパス
-const DELTA_FILE_PATH = '/poic_delta.json';
-const METADATA_FILE_PATH = '/poic_metadata.json';
-
-// 差分データの型
-interface DeltaData {
-  timestamp: number;
-  changes: Card[];
-}
-
-// 差分アップロード（変更されたカードのみ送信）
-export const uploadDeltaToDropbox = async (changedCards: Card[], metadata: SyncMetadata) => {
+/**
+ * 複数カードをDropboxにアップロード（バッチ処理）
+ */
+export const uploadToDropbox = async (cards: Card[]): Promise<void> => {
   const token = await getAccessToken();
   if (!token) throw new Error('Unauthorized');
 
-  const deltaData: DeltaData = {
-    timestamp: Date.now(),
-    changes: changedCards
-  };
+  await ensureFolder(token, CARDS_FOLDER);
 
-  // 差分データをアップロード
-  const deltaContent = JSON.stringify(deltaData);
-  await fetch('https://content.dropboxapi.com/2/files/upload', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/octet-stream',
-      'Dropbox-API-Arg': JSON.stringify({
-        path: DELTA_FILE_PATH,
-        mode: 'overwrite',
-        autorename: false,
-        mute: true
-      })
-    },
-    body: deltaContent
-  });
-
-  // メタデータを更新
-  const metadataContent = JSON.stringify(metadata);
-  await fetch('https://content.dropboxapi.com/2/files/upload', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/octet-stream',
-      'Dropbox-API-Arg': JSON.stringify({
-        path: METADATA_FILE_PATH,
-        mode: 'overwrite',
-        autorename: false,
-        mute: true
-      })
-    },
-    body: metadataContent
-  });
+  // 並列アップロード（最大5件同時）
+  const batchSize = 5;
+  for (let i = 0; i < cards.length; i += batchSize) {
+    const batch = cards.slice(i, i + batchSize);
+    await Promise.all(batch.map(card => uploadCardToDropbox(card)));
+  }
 };
 
-// 差分ダウンロード（変更分のみ取得）
-export const downloadDeltaFromDropbox = async (): Promise<DeltaData | null> => {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Unauthorized');
+/**
+ * Dropboxからカードをダウンロード
+ */
+const downloadCardFromDropbox = async (token: string, filePath: string): Promise<Card | null> => {
+  try {
+    const response = await fetch('https://content.dropboxapi.com/2/files/download', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Dropbox-API-Arg': JSON.stringify({
+          path: filePath,
+        }),
+      },
+    });
 
-  const response = await fetch('https://content.dropboxapi.com/2/files/download', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Dropbox-API-Arg': JSON.stringify({
-        path: DELTA_FILE_PATH
-      })
+    if (!response.ok) {
+      if (response.status === 409) {
+        return null; // ファイルが存在しない
+      }
+      throw new Error(`Failed to download ${filePath}`);
     }
-  });
 
-  if (response.status === 409) {
-    return null; // ファイルが存在しない
-  }
-
-  if (!response.ok) {
-    throw new Error(`Dropbox Download Failed: ${response.status}`);
-  }
-
-  return await response.json();
-};
-
-// メタデータダウンロード
-export const downloadMetadataFromDropbox = async (): Promise<SyncMetadata | null> => {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Unauthorized');
-
-  const response = await fetch('https://content.dropboxapi.com/2/files/download', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Dropbox-API-Arg': JSON.stringify({
-        path: METADATA_FILE_PATH
-      })
-    }
-  });
-
-  if (response.status === 409) {
+    const markdown = await response.text();
+    const filename = filePath.split('/').pop() || '';
+    return markdownToCard(markdown, filename);
+  } catch (error) {
+    console.error(`Error downloading ${filePath}:`, error);
     return null;
   }
-
-  if (!response.ok) {
-    throw new Error(`Dropbox Download Failed: ${response.status}`);
-  }
-
-  return await response.json();
 };
 
-// 初回同期用：フルデータをアップロード
-export const uploadFullDataToDropbox = async (data: Card[]) => {
-  await uploadToDropbox(data);
-  
-  // メタデータを初期化
-  const metadata: SyncMetadata = {
-    lastSyncTime: Date.now(),
-    localChanges: []
-  };
-  
+/**
+ * Dropboxフォルダ内のすべてのカードをダウンロード
+ */
+export const downloadFromDropbox = async (): Promise<Card[]> => {
   const token = await getAccessToken();
   if (!token) throw new Error('Unauthorized');
-  
-  await fetch('https://content.dropboxapi.com/2/files/upload', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/octet-stream',
-      'Dropbox-API-Arg': JSON.stringify({
-        path: METADATA_FILE_PATH,
-        mode: 'overwrite',
-        autorename: false,
-        mute: true
-      })
-    },
-    body: JSON.stringify(metadata)
-  });
+
+  try {
+    // フォルダ内のファイル一覧を取得
+    // 空文字列の場合はルートディレクトリを指定
+    const folderPath = CARDS_FOLDER || '';
+    
+    const listResponse = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        path: folderPath,
+        recursive: false,
+      }),
+    });
+
+    if (!listResponse.ok) {
+      if (listResponse.status === 409) {
+        console.log('Cards folder does not exist yet');
+        return [];
+      }
+      throw new Error('Failed to list cards folder');
+    }
+
+    const listData = await listResponse.json();
+    const entries = listData.entries || [];
+
+    // Markdownファイルのみをフィルタ
+    const markdownFiles = entries.filter((entry: any) => 
+      entry['.tag'] === 'file' && 
+      entry.name.endsWith('.md')
+    );
+
+    // 各ファイルをダウンロード（並列処理）
+    const batchSize = 5;
+    const cards: Card[] = [];
+
+    for (let i = 0; i < markdownFiles.length; i += batchSize) {
+      const batch = markdownFiles.slice(i, i + batchSize);
+      const batchResults = await Promise.all(
+        batch.map((file: any) => downloadCardFromDropbox(token, file.path_lower))
+      );
+      
+      cards.push(...batchResults.filter((card): card is Card => card !== null));
+    }
+
+    return cards;
+  } catch (error) {
+    console.error('Error downloading from Dropbox:', error);
+    throw error;
+  }
+};
+
+/**
+ * Dropboxからカードを削除
+ */
+export const deleteCardFromDropbox = async (card: Card): Promise<void> => {
+  const token = await getAccessToken();
+  if (!token) throw new Error('Unauthorized');
+
+  const filePath = getCardFilePath(card);
+
+  try {
+    const response = await fetch('https://api.dropboxapi.com/2/files/delete_v2', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        path: filePath,
+      }),
+    });
+
+    if (!response.ok && response.status !== 409) {
+      // 409 = file not found は無視
+      const errorText = await response.text();
+      console.warn(`Failed to delete card ${card.id}:`, errorText);
+    }
+  } catch (error) {
+    console.error(`Error deleting card ${card.id}:`, error);
+  }
 };
 
 export const isAuthenticated = async (): Promise<boolean> => {

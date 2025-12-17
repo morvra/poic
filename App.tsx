@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardType, ViewMode, PoicStats } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern, cleanupDeletedCards } from './utils';
-import { uploadToDropbox, downloadFromDropbox, isAuthenticated, logout, initiateAuth, handleAuthCallback } from './utils/dropbox';
+import { uploadToDropbox, downloadFromDropbox, isAuthenticated, logout, initiateAuth, handleAuthCallback, uploadCardToDropbox, deleteCardFromDropbox } from './utils/dropbox';
 import type { SyncMetadata } from './types';
 import { idbStorage, migrateFromLocalStorage } from './utils/indexedDB';
 import { CardItem } from './components/CardItem';
@@ -305,7 +305,7 @@ initializeData();
   }, [cards, isLoading]);
   useEffect(() => { 
     if (!dropboxToken || isLoading) return;
-  
+
     const timeoutId = setTimeout(async () => {
       try {
         // クリーンアップ
@@ -315,25 +315,49 @@ initializeData();
           return;
         }
 
-        // 差分同期は一旦無効化して、フル同期を使用
-        await uploadToDropbox(cleanedCards);
-        
-        // 同期完了後、localChangesをクリア
-        setSyncMetadata(prev => ({
-          ...prev,
-          lastSyncTime: Date.now(),
-          localChanges: []
-        }));
+        // 変更されたカードのみをアップロード
+        if (syncMetadata.localChanges.length > 0) {
+          const changedCards = cleanedCards.filter(c => 
+            syncMetadata.localChanges.includes(c.id)
+          );
+          
+          // 削除されたカードはDropboxからも削除
+          const deletedCards = changedCards.filter(c => c.isDeleted);
+          for (const card of deletedCards) {
+            try {
+              await deleteCardFromDropbox(card);
+            } catch (error) {
+              console.error(`Failed to delete card ${card.id} from Dropbox:`, error);
+            }
+          }
+          
+          // 更新・新規カードをアップロード
+          const activeCards = changedCards.filter(c => !c.isDeleted);
+          for (const card of activeCards) {
+            try {
+              await uploadCardToDropbox(card);
+            } catch (error) {
+              console.error(`Failed to upload card ${card.id}:`, error);
+            }
+          }
+          
+          // 同期完了後、localChangesをクリア
+          setSyncMetadata(prev => ({
+            ...prev,
+            lastSyncTime: Date.now(),
+            localChanges: []
+          }));
+        }
       } catch (error) {
         console.error('Sync error:', error);
         if (error instanceof Error && (error.message.includes('Token refresh failed') || error.message.includes('Unauthorized'))) {
           handleDisconnectDropbox();
         }
       }
-    }, 3000); // 3秒
+    }, 3000);
 
     return () => clearTimeout(timeoutId); 
-  }, [cards, dropboxToken, isLoading]);
+  }, [cards, dropboxToken, isLoading, syncMetadata.localChanges]);
   useEffect(() => { 
     const handleKeyDown = (e: KeyboardEvent) => { 
       // エディターやサイドバーが開いている時、入力フィールドにフォーカスがある時はスキップ
@@ -386,7 +410,6 @@ initializeData();
   const syncDownload = async (token?: string) => { 
     setIsSyncing(true); 
     try {
-      // フル同期を使用
       const remoteCards = await downloadFromDropbox();
       if (remoteCards && Array.isArray(remoteCards)) {
         setCards(prevCards => {
@@ -543,6 +566,14 @@ initializeData();
             const escapedOldTitle = oldCard.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const oldTitleRegex = new RegExp(`\\[\\[${escapedOldTitle}\\]\\]`, 'g');
             const newLink = `[[${cardData.title}]]`;
+
+            // タイトル変更時は旧ファイルを削除するため、旧カード情報を保持
+            if (isDropboxConnected) {
+                // 旧ファイル削除用のマーカー
+                deleteCardFromDropbox(oldCard).catch(err => {
+                    console.error('Failed to delete old file:', err);
+                });
+            }
 
             setCards(cards.map(c => {
                 if (c.id === currentId) {
