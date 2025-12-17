@@ -651,77 +651,91 @@ export default function App() {
   };
 
   const handleSaveCard = (cardData: Partial<Card>, shouldClose = true) => {
-    const currentId = cardData.id; 
-    if (!currentId) return;
+      const currentId = cardData.id; 
+      if (!currentId) return;
 
-    let actualSavedId = currentId; // 実際に保存されたID
+      // タイトルの重複チェック（新規作成時とタイトル変更時）
+      if (cardData.title && cardData.title.trim()) {
+          const titleExists = cards.some(c => 
+              c.title === cardData.title && 
+              c.id !== currentId && 
+              !c.isDeleted
+          );
 
-    if (phantomCards.has(currentId)) {
-        const existingIndex = cards.findIndex(c => c.id === currentId);
+          if (titleExists) {
+              alert('同じタイトルのカードが既に存在します。別のタイトルを使用してください。');
+              return;
+          }
+      }
 
-        if (existingIndex === -1) {
-             const newId = generateId();
-             actualSavedId = newId; // 新しいIDを記録
-             const newCard: Card = {
-                id: newId,
-                type: cardData.type || CardType.Record,
-                title: cardData.title || '無題',
-                body: cardData.body || '',
-                createdAt: cardData.createdAt || Date.now(),
-                updatedAt: Date.now(),
-                dueDate: cardData.dueDate,
-                completed: false,
-                stacks: cardData.stacks || [],
-                isDeleted: false,
-                isPinned: cardData.isPinned || false
-             };
-             setCards([newCard, ...cards]);
+      let actualSavedId = currentId; // 実際に保存されたID
 
-             if (activeModalCardId === currentId) setActiveModalCardId(newId);
-             if (activeSideCardId === currentId) setActiveSideCardId(newId);
-             
-             setPhantomCards(prev => { const n = new Map(prev); n.delete(currentId); return n; });
-        }
-    } else {
-        const oldCard = cards.find(c => c.id === currentId);
-        const titleChanged = oldCard && cardData.title && oldCard.title !== cardData.title;
+      if (phantomCards.has(currentId)) {
+          const existingIndex = cards.findIndex(c => c.id === currentId);
 
-        if (titleChanged && oldCard) {
-            const escapedOldTitle = oldCard.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const oldTitleRegex = new RegExp(`\\[\\[${escapedOldTitle}\\]\\]`, 'g');
-            const newLink = `[[${cardData.title}]]`;
+          if (existingIndex === -1) {
+              const newId = generateId();
+              actualSavedId = newId; // 新しいIDを記録
+              const newCard: Card = {
+                  id: newId,
+                  type: cardData.type || CardType.Record,
+                  title: cardData.title || '無題',
+                  body: cardData.body || '',
+                  createdAt: cardData.createdAt || Date.now(),
+                  updatedAt: Date.now(),
+                  dueDate: cardData.dueDate,
+                  completed: false,
+                  stacks: cardData.stacks || [],
+                  isDeleted: false,
+                  isPinned: cardData.isPinned || false
+              };
+              setCards([newCard, ...cards]);
 
-            // タイトル変更時は旧ファイルを削除するため、旧カード情報を保持
-            if (isDropboxConnected) {
-                // 旧ファイル削除用のマーカー
-                deleteCardFromDropbox(oldCard).catch(err => {
-                    console.error('Failed to delete old file:', err);
-                });
-            }
+              if (activeModalCardId === currentId) setActiveModalCardId(newId);
+              if (activeSideCardId === currentId) setActiveSideCardId(newId);
+              
+              setPhantomCards(prev => { const n = new Map(prev); n.delete(currentId); return n; });
+          }
+      } else {
+          const oldCard = cards.find(c => c.id === currentId);
+          const titleChanged = oldCard && cardData.title && oldCard.title !== cardData.title;
 
-            setCards(cards.map(c => {
-                if (c.id === currentId) {
-                     return { ...c, ...cardData, updatedAt: Date.now() } as Card;
-                }
-                if (c.body.match(oldTitleRegex)) {
-                    return {
-                        ...c,
-                        body: c.body.replace(oldTitleRegex, newLink),
-                        updatedAt: Date.now()
-                    };
-                }
-                return c;
-            }));
-        } else {
-            setCards(cards.map(c => c.id === currentId ? { ...c, ...cardData, updatedAt: Date.now() } as Card : c));
-        }
-    }
-    
-    // 実際に保存されたIDをlocalChangesに追加
-    setSyncMetadata(prev => ({
-      ...prev,
-      localChanges: [...new Set([...prev.localChanges, actualSavedId])]
-    }));
+          if (titleChanged && oldCard) {
+              const escapedOldTitle = oldCard.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const oldTitleRegex = new RegExp(`\\[\\[${escapedOldTitle}\\]\\]`, 'g');
+              const newLink = `[[${cardData.title}]]`;
+
+              // タイトル変更時は旧ファイルを削除するため、旧カード情報を保持
+              if (isDropboxConnected) {
+                  // 旧ファイル削除用のマーカー
+                  deleteCardFromDropbox(oldCard).catch(err => {
+                      console.error('Failed to delete old file:', err);
+                  });
+              }
+
+              setCards(cards.map(c => {
+                  if (c.id === currentId) {
+                      return { ...c, ...cardData, updatedAt: Date.now() } as Card;
+                  }
+                  if (c.body.match(oldTitleRegex)) {
+                      return {
+                          ...c,
+                          body: c.body.replace(oldTitleRegex, newLink),
+                          updatedAt: Date.now()
+                      };
+                  }
+                  return c;
+              }));
+          } else {
+              setCards(cards.map(c => c.id === currentId ? { ...c, ...cardData, updatedAt: Date.now() } as Card : c));
+          }
+      }
+      
+      // 実際に保存されたIDをlocalChangesに追加
+      setSyncMetadata(prev => ({
+        ...prev,
+        localChanges: [...new Set([...prev.localChanges, actualSavedId])]
+      }));
   };
 
   const handleDeleteCard = (id: string) => {
