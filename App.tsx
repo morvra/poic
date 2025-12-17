@@ -932,7 +932,7 @@ export default function App() {
       </aside>
 
       <div className="flex-1 flex overflow-hidden relative">
-          <main className={`flex-1 overflow-y-auto bg-stone-200 transition-all duration-200 border-r border-stone-300/50 relative`}>
+          <main className={`flex-1 overflow-y-auto bg-stone-200 transition-all duration-200 border-r border-stone-300/50 relative`} style={{ WebkitOverflowScrolling: 'touch' }}>
             <div className={activeModalCard ? 'blur-sm pointer-events-none select-none' : ''}>
                 <header className="sticky top-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 mb-4 border-b border-stone-300/30">
                     <div className="flex items-center gap-3 flex-1">
