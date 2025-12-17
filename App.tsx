@@ -541,25 +541,121 @@ export default function App() {
 
   const syncUpload = async (token: string, data: Card[]) => { if (!isDropboxConnected) return; setIsSyncing(true); try { await uploadToDropbox(data); } catch (error) { console.error('Dropbox Upload Error:', error); if (error instanceof Error && (error.message.includes('Token refresh failed') || error.message.includes('Unauthorized'))) { handleDisconnectDropbox(); } } finally { setIsSyncing(false); } };
 
-  const handleManualSync = async () => { 
+  const handleManualSync = async (forceFullSync: boolean = false) => { 
     setIsSyncing(true);
     try {
-      console.log('Manual sync started');
+      console.log(forceFullSync ? 'Full sync started' : 'Manual sync started');
       
-      // まずローカルの全カードをアップロード
-      const activeCards = cards.filter(c => !c.isDeleted);
-      console.log('Uploading all local cards:', activeCards.length);
+      // まずリモートからダウンロードして最新状態を取得
+      const remoteCards = await downloadFromDropbox();
+      const remoteCardIds = new Set(remoteCards.map(c => c.id));
+      const localCardIds = new Set(cards.filter(c => !c.isDeleted).map(c => c.id));
       
-      for (const card of activeCards) {
-        try {
-          await uploadCardToDropbox(card);
-        } catch (error) {
-          console.error(`Failed to upload ${card.id}:`, error);
+      console.log('Remote cards:', remoteCards.length);
+      console.log('Local cards:', cards.filter(c => !c.isDeleted).length);
+      
+      if (forceFullSync) {
+        // フル同期: すべてのカードをアップロード
+        const activeCards = cards.filter(c => !c.isDeleted);
+        console.log('Uploading all local cards:', activeCards.length);
+        
+        for (const card of activeCards) {
+          try {
+            await uploadCardToDropbox(card);
+          } catch (error) {
+            console.error(`Failed to upload ${card.id}:`, error);
+          }
+        }
+      } else {
+        // 差分同期
+        
+        // 1. ローカルにあってリモートにないカードを検出
+        const localOnlyCards = cards.filter(c => 
+          !c.isDeleted && !remoteCardIds.has(c.id)
+        );
+        
+        // 2. リモートにあってローカルにないカードを検出
+        const remoteOnlyCards = remoteCards.filter(c => 
+          !c.isDeleted && !localCardIds.has(c.id)
+        );
+        
+        console.log('Cards only in local:', localOnlyCards.length);
+        console.log('Cards only in remote:', remoteOnlyCards.length);
+        
+        // ローカルオンリーのカードをアップロード
+        if (localOnlyCards.length > 0) {
+          console.log('Uploading cards not in Dropbox:', localOnlyCards.length);
+          for (const card of localOnlyCards) {
+            try {
+              console.log('Uploading missing card:', card.id, card.title);
+              await uploadCardToDropbox(card);
+            } catch (error) {
+              console.error(`Failed to upload ${card.id}:`, error);
+            }
+          }
+        }
+        
+        // リモートオンリーのカードをローカルに追加
+        if (remoteOnlyCards.length > 0) {
+          console.log('Adding cards from Dropbox:', remoteOnlyCards.length);
+          setCards(prevCards => {
+            const newCards = [...prevCards];
+            remoteOnlyCards.forEach(rc => {
+              console.log('Adding remote card:', rc.id, rc.title);
+              newCards.push(rc);
+            });
+            return newCards;
+          });
+        }
+        
+        // 3. 変更されたカードをアップロード
+        if (syncMetadata.localChanges.length > 0) {
+          console.log('Uploading changed cards:', syncMetadata.localChanges);
+          
+          const changedCards = cards.filter(c => 
+            syncMetadata.localChanges.includes(c.id)
+          );
+          
+          console.log('Changed cards to sync:', changedCards.length);
+          
+          // 削除されたカードはDropboxからも削除
+          const deletedCards = changedCards.filter(c => c.isDeleted);
+          for (const card of deletedCards) {
+            try {
+              console.log('Deleting card from Dropbox:', card.id, card.title);
+              await deleteCardFromDropbox(card);
+            } catch (error) {
+              console.error(`Failed to delete card ${card.id} from Dropbox:`, error);
+            }
+          }
+          
+          // 更新・新規カードをアップロード（ローカルオンリーと重複しないように）
+          const activeCards = changedCards.filter(c => 
+            !c.isDeleted && !localOnlyCards.some(loc => loc.id === c.id)
+          );
+          
+          for (const card of activeCards) {
+            try {
+              console.log('Uploading changed card:', card.id, card.title);
+              await uploadCardToDropbox(card);
+            } catch (error) {
+              console.error(`Failed to upload card ${card.id}:`, error);
+            }
+          }
+        } else if (localOnlyCards.length === 0) {
+          console.log('No local changes to upload');
         }
       }
       
-      // その後リモートからダウンロード
+      // 最後にもう一度フルダウンロードしてマージ（タイムスタンプベースのマージ）
       await syncDownload();
+      
+      // 同期完了後、localChangesをクリア
+      setSyncMetadata(prev => ({
+        ...prev,
+        lastSyncTime: Date.now(),
+        localChanges: []
+      }));
       
       console.log('Manual sync completed');
     } catch (error) {
@@ -804,7 +900,7 @@ export default function App() {
                 <div className="space-y-1"><button onClick={() => handleViewChange('All')} className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium transition-colors ${viewMode === 'All' ? 'bg-white shadow-sm text-stone-900 border border-stone-100' : 'text-stone-500 hover:text-stone-900'}`}><Library size={18} /> すべてのカード<span className="ml-auto text-xs text-stone-400">{stats.total}</span></button><button onClick={() => handleViewChange('GTD')} className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium transition-colors ${viewMode === 'GTD' ? 'bg-white shadow-sm text-green-700 border border-green-100' : 'text-stone-500 hover:text-green-700'}`}><CheckSquare size={18} /> GTD タスク<span className="ml-auto text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{stats.gtdActive}</span></button></div>
                 <div className="pt-4 border-t border-stone-200/50"><div className="grid grid-cols-2 gap-2 px-2"><button onClick={() => handleViewChange('Type', CardType.Record)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Record ? 'bg-blue-100 border-blue-300 shadow-inner' : 'bg-blue-50 border-blue-100 hover:bg-blue-100'}`}><div className="text-xl font-bold text-blue-600">{stats.record}</div><div className="text-[10px] uppercase text-blue-400">RECORD</div></button><button onClick={() => handleViewChange('Type', CardType.Discovery)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Discovery ? 'bg-red-100 border-red-300 shadow-inner' : 'bg-red-50 border-red-100 hover:bg-red-100'}`}><div className="text-xl font-bold text-red-600">{stats.discovery}</div><div className="text-[10px] uppercase text-red-400">DISCOVERY</div></button><button onClick={() => handleViewChange('Type', CardType.GTD)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.GTD ? 'bg-green-100 border-green-300 shadow-inner' : 'bg-green-50 border-green-100 hover:bg-green-100'}`}><div className="text-xl font-bold text-green-600">{stats.gtdTotal}</div><div className="text-[10px] uppercase text-green-400">GTD</div></button><button onClick={() => handleViewChange('Type', CardType.Reference)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Reference ? 'bg-yellow-100 border-yellow-300 shadow-inner' : 'bg-yellow-50 border-yellow-100 hover:bg-yellow-100'}`}><div className="text-xl font-bold text-yellow-600">{stats.reference}</div><div className="text-[10px] uppercase text-yellow-400">REF</div></button></div></div>
                 <div className="pt-2 border-t border-stone-200/50"><h3 className="px-3 text-xs font-bold text-stone-400 uppercase tracking-wider mb-2 flex items-center gap-2 mt-4"><Tag size={12} /> タグ</h3><div className="space-y-1">{allStacks.map(stack => (<button key={stack.name} onClick={() => handleViewChange('Stack', stack.name)} className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors flex justify-between items-center ${activeStack === stack.name ? 'bg-stone-200 text-stone-900 font-medium' : 'text-stone-500 hover:text-stone-800'}`}><span className="truncate">{stack.name}</span><span className="text-xs bg-stone-200/50 px-1.5 py-0.5 rounded-full text-stone-400">{stack.count}</span></button>))}{allStacks.length === 0 && <p className="px-3 text-xs text-stone-300 italic">No tags yet</p>}</div></div>
-                <div className="pt-2 border-t border-stone-200/50"><h3 className="px-3 text-xs font-bold text-stone-400 uppercase tracking-wider mb-2 flex items-center gap-2 mt-4"><Cloud size={12} /> Sync</h3>{isDropboxConnected ? (<div className="px-3 space-y-2"><button onClick={handleDisconnectDropbox} className="w-full bg-blue-100 text-blue-700 text-xs py-2 rounded-md font-bold hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"><Cloud size={14} />{isSyncing ? '同期中...' : 'Dropbox 接続済み'}</button><button onClick={handleManualSync} disabled={isSyncing} className="w-full bg-stone-200 text-stone-600 text-xs py-2 rounded-md font-bold hover:bg-stone-300 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"><RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />今すぐ同期</button></div>) : (<div className="px-3"><button onClick={handleConnectDropbox} className="w-full bg-stone-200 text-stone-600 text-xs py-2 rounded-md font-bold hover:bg-stone-300 transition-colors flex items-center justify-center gap-2"><Cloud size={14} />Dropbox に接続</button></div>)}</div>
+                <div className="pt-2 border-t border-stone-200/50"><h3 className="px-3 text-xs font-bold text-stone-400 uppercase tracking-wider mb-2 flex items-center gap-2 mt-4"><Cloud size={12} /> Sync</h3>{isDropboxConnected ? (<div className="px-3 space-y-2"><button onClick={handleDisconnectDropbox} className="w-full bg-blue-100 text-blue-700 text-xs py-2 rounded-md font-bold hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"><Cloud size={14} />{isSyncing ? '同期中...' : 'Dropbox 接続済み'}</button><button onClick={(e) => handleManualSync(e.shiftKey)} disabled={isSyncing}  className="w-full bg-stone-200 text-stone-600 text-xs py-2 rounded-md font-bold hover:bg-stone-300 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"><RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />今すぐ同期</button></div>) : (<div className="px-3"><button onClick={handleConnectDropbox} className="w-full bg-stone-200 text-stone-600 text-xs py-2 rounded-md font-bold hover:bg-stone-300 transition-colors flex items-center justify-center gap-2"><Cloud size={14} />Dropbox に接続</button></div>)}</div>
                 <div className="pt-4 border-t border-stone-200/50"><button onClick={() => setIsSettingsOpen(true)} className="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors"><Settings size={18} />設定</button></div>
             </nav>
         </div>
@@ -818,17 +914,17 @@ export default function App() {
                         <button onClick={toggleSidebar} className="text-stone-600 hover:bg-stone-300 p-2 rounded-md transition-colors"><Menu size={20} /></button>
                         <button onClick={handleHome} title="すべて表示" className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"><Home size={20} /></button>
 
-          {/* 同期ボタン */}
-          {isDropboxConnected && (
-              <button 
-                  onClick={handleManualSync} 
-                  disabled={isSyncing}
-                  title={isSyncing ? '同期中...' : '今すぐ同期'}
-                  className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                  <RefreshCw size={20} className={isSyncing ? "animate-spin" : ""} />
-              </button>
-          )}
+                    {/* 同期ボタン - Dropbox接続時のみ表示 */}
+                    {isDropboxConnected && (
+                        <button 
+                            onClick={(e) => handleManualSync(e.shiftKey)} 
+                            disabled={isSyncing}
+                            title={isSyncing ? '同期中...' : '今すぐ同期 (Shift+クリックでフル同期)'}
+                            className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <RefreshCw size={20} className={isSyncing ? "animate-spin" : ""} />
+                        </button>
+                    )}
 
                         <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} /><input type="text" placeholder="検索..." className="w-full pl-9 pr-4 py-2 bg-white border border-stone-300/50 rounded-full text-sm focus:ring-2 focus:ring-stone-400 focus:border-stone-400 transition-all outline-none shadow-sm" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />{searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs">クリア</button>}</div>
                         {viewMode === 'GTD' && <div className="hidden sm:flex items-center gap-2 text-xs text-stone-500 bg-white px-3 py-1.5 rounded-full border border-stone-200 shadow-sm"><Filter size={12} /><span>並び順: 期限</span></div>}
