@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Card, CardType, ViewMode, PoicStats } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern, cleanupDeletedCards } from './utils';
 import { uploadToDropbox, downloadFromDropbox, isAuthenticated, isAuthenticatedAsync, logout, initiateAuth, handleAuthCallback, uploadCardToDropbox, deleteCardFromDropbox } from './utils/dropbox';
@@ -58,6 +58,7 @@ export default function App() {
   // --- State ---
   const [cards, setCards] = useState<Card[]>(INITIAL_CARDS);
   const [isLoading, setIsLoading] = useState(true);
+  const mainScrollRef = useRef<HTMLDivElement>(null);
   
   const [viewMode, setViewMode] = useState<ViewMode>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -878,7 +879,24 @@ export default function App() {
   };
 
   const handleRandomCard = () => { if (filteredCards.length === 0) return; const randomIndex = Math.floor(Math.random() * filteredCards.length); const card = filteredCards[randomIndex]; const el = document.getElementById(`card-${card.id}`); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.style.transition = 'transform 0.2s, box-shadow 0.2s'; el.style.transform = 'scale(1.02)'; el.style.boxShadow = '0 0 0 4px rgba(6, 182, 212, 0.5)'; setTimeout(() => { el.style.transform = ''; el.style.boxShadow = ''; }, 1000); } };
-  const handleHome = () => { setSearchQuery(''); setViewMode('All'); setActiveStack(null); setActiveType(null); };
+
+  const handleHome = () => { 
+    const isAlreadyHome = viewMode === 'All' && !searchQuery && !activeStack && !activeType;
+    
+    if (isAlreadyHome) {
+      // すでにDock画面にいる場合は最上部にスクロール
+      if (mainScrollRef.current) {
+        mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } else {
+      // Dock画面に戻る
+      setSearchQuery(''); 
+      setViewMode('All'); 
+      setActiveStack(null); 
+      setActiveType(null);
+    }
+  };
+
   const handleExportOPML = () => { 
       let exportCards = filteredCards; if (isSelectionMode && selectedCardIds.size > 0) { exportCards = cards.filter(c => !c.isDeleted && selectedCardIds.has(c.id)); }
       if (exportCards.length === 0) { alert('出力するカードがありません。'); return; }
@@ -1042,6 +1060,7 @@ export default function App() {
               {/* メインスクロールエリア - 最もシンプルな構造 */}
               <div className="flex-1 flex overflow-hidden">
                   <div 
+                      ref={mainScrollRef}
                       className="flex-1 overflow-y-scroll bg-stone-200"
                       style={{ 
                           WebkitOverflowScrolling: 'touch'
