@@ -464,23 +464,44 @@ export default function App() {
   const syncDownload = async (token?: string) => { 
     setIsSyncing(true); 
     try {
+      console.log('Starting sync download...');
+      
       const remoteCards = await downloadFromDropbox();
+      console.log('Remote cards downloaded:', remoteCards.length);
+      
       if (remoteCards && Array.isArray(remoteCards)) {
         setCards(prevCards => {
+          console.log('Previous local cards:', prevCards.length);
+          
           const mergedMap = new Map<string, Card>();
           
           // 既存カードをマップに
-          prevCards.forEach(c => mergedMap.set(c.id, c));
+          prevCards.forEach(c => {
+            if (!c.isDeleted) {
+              mergedMap.set(c.id, c);
+            }
+          });
+          
+          console.log('Local cards (non-deleted):', mergedMap.size);
           
           // リモートのカードをマージ（updatedAtが新しい方を優先）
           remoteCards.forEach((rc: Card) => {
             const local = mergedMap.get(rc.id);
-            if (!local || rc.updatedAt > local.updatedAt) {
+            if (!local) {
+              console.log('New card from remote:', rc.id, rc.title);
               mergedMap.set(rc.id, rc);
+            } else if (rc.updatedAt > local.updatedAt) {
+              console.log('Updating card from remote:', rc.id, rc.title);
+              mergedMap.set(rc.id, rc);
+            } else {
+              console.log('Keeping local version:', rc.id, rc.title);
             }
           });
           
-          return Array.from(mergedMap.values());
+          const merged = Array.from(mergedMap.values());
+          console.log('Merged cards:', merged.length);
+          
+          return merged;
         });
       }
       
@@ -488,6 +509,8 @@ export default function App() {
         lastSyncTime: Date.now(),
         localChanges: []
       });
+      
+      console.log('Sync download completed');
     } catch (error) { 
       console.error('Dropbox Sync Error:', error); 
       if (error instanceof Error && (error.message.includes('Unauthorized') || error.message.includes('401'))) { 
@@ -498,7 +521,35 @@ export default function App() {
     } 
   };
   const syncUpload = async (token: string, data: Card[]) => { if (!isDropboxConnected) return; setIsSyncing(true); try { await uploadToDropbox(data); } catch (error) { console.error('Dropbox Upload Error:', error); if (error instanceof Error && (error.message.includes('Token refresh failed') || error.message.includes('Unauthorized'))) { handleDisconnectDropbox(); } } finally { setIsSyncing(false); } };
-  const handleManualSync = () => { syncDownload(); };
+
+  const handleManualSync = async () => { 
+    setIsSyncing(true);
+    try {
+      console.log('Manual sync started');
+      
+      // まずローカルの全カードをアップロード
+      const activeCards = cards.filter(c => !c.isDeleted);
+      console.log('Uploading all local cards:', activeCards.length);
+      
+      for (const card of activeCards) {
+        try {
+          await uploadCardToDropbox(card);
+        } catch (error) {
+          console.error(`Failed to upload ${card.id}:`, error);
+        }
+      }
+      
+      // その後リモートからダウンロード
+      await syncDownload();
+      
+      console.log('Manual sync completed');
+    } catch (error) {
+      console.error('Manual sync error:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleConnectDropbox = () => { initiateAuth(); };
   const handleDisconnectDropbox = () => { logout(); setIsDropboxConnected(false); setDropboxToken(null); };
 

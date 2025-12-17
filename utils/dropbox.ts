@@ -311,12 +311,24 @@ const sanitizeFilename = (filename: string): string => {
 
 /**
  * CardからDropboxファイルパスを生成
+ * 日本語タイトルの場合はIDを使用し、英数字のみの場合はタイトルを使用
  */
 const getCardFilePath = (card: Card): string => {
-  const safeTitle = sanitizeFilename(card.title || 'untitled');
-  const filename = `${safeTitle}.md`;
+  const title = card.title || 'untitled';
   
-  // CARDS_FOLDERが空の場合はルートディレクトリ
+  // ASCII文字のみかチェック
+  const isAsciiOnly = /^[\x00-\x7F]*$/.test(title);
+  
+  let filename: string;
+  if (isAsciiOnly) {
+    // ASCII文字のみの場合はタイトルを使用
+    const safeTitle = sanitizeFilename(title);
+    filename = `${safeTitle}.md`;
+  } else {
+    // 日本語などが含まれる場合はIDを使用してタイトルをメタデータで管理
+    filename = `${card.id}.md`;
+  }
+  
   if (!CARDS_FOLDER || CARDS_FOLDER === '') {
     return `/${filename}`;
   }
@@ -370,25 +382,32 @@ export const uploadCardToDropbox = async (card: Card): Promise<void> => {
   const markdown = cardToMarkdown(card);
   const filePath = getCardFilePath(card);
 
+  // Dropbox-API-Argヘッダーは ASCII 文字のみを受け付けるため、
+  // 日本語などの非ASCII文字を含むパスの場合、エンコードが必要
+  const apiArg = JSON.stringify({
+    path: filePath,
+    mode: 'overwrite',
+    autorename: false,
+    mute: true,
+  });
+
   const response = await fetch('https://content.dropboxapi.com/2/files/upload', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/octet-stream',
-      'Dropbox-API-Arg': JSON.stringify({
-        path: filePath,
-        mode: 'overwrite', // 'add' に変更すると重複時にエラー、'autorename: true' で自動リネーム
-        autorename: false,
-        mute: true,
-      }),
+      'Dropbox-API-Arg': apiArg,
     },
-    body: markdown,
+    body: new TextEncoder().encode(markdown), // UTF-8でエンコード
   });
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error('Upload error details:', errorText);
     throw new Error(`Failed to upload card ${card.id}: ${errorText}`);
   }
+  
+  console.log('Successfully uploaded:', card.title);
 };
 
 /**
@@ -425,14 +444,28 @@ const downloadCardFromDropbox = async (token: string, filePath: string): Promise
 
     if (!response.ok) {
       if (response.status === 409) {
-        return null; // ファイルが存在しない
+        console.log('File not found:', filePath);
+        return null;
       }
+      const errorText = await response.text();
+      console.error('Download error:', errorText);
       throw new Error(`Failed to download ${filePath}`);
     }
 
     const markdown = await response.text();
     const filename = filePath.split('/').pop() || '';
-    return markdownToCard(markdown, filename);
+    
+    console.log('Downloaded file:', filename);
+    
+    const card = markdownToCard(markdown, filename);
+    
+    if (card) {
+      console.log('Parsed card:', card.id, card.title);
+    } else {
+      console.error('Failed to parse card from:', filename);
+    }
+    
+    return card;
   } catch (error) {
     console.error(`Error downloading ${filePath}:`, error);
     return null;
