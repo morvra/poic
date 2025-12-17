@@ -197,63 +197,78 @@ const cardToMarkdown = (card: Card): string => {
 
 /**
  * Markdown形式をCardオブジェクトに変換
+ * フロントマターがない場合は自動生成
  */
 const markdownToCard = (markdown: string, filename: string): Card | null => {
-  // フロントマターの抽出
+  let frontmatter: Record<string, any> = {};
+  let body = markdown;
+
+  // フロントマターの抽出を試みる
   const frontmatterMatch = markdown.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  if (!frontmatterMatch) {
-    console.warn(`Invalid markdown format in ${filename}`);
-    return null;
-  }
+  
+  if (frontmatterMatch) {
+    // フロントマターがある場合
+    const [, frontmatterText, bodyText] = frontmatterMatch;
+    body = bodyText;
 
-  const [, frontmatterText, body] = frontmatterMatch;
-  const frontmatter: Record<string, any> = {};
+    // YAMLパース（簡易版）
+    const lines = frontmatterText.split('\n');
+    let currentKey: string | null = null;
+    let currentArray: string[] | null = null;
 
-  // YAMLパース（簡易版）
-  const lines = frontmatterText.split('\n');
-  let currentKey: string | null = null;
-  let currentArray: string[] | null = null;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    // 配列要素の処理
-    if (trimmed.startsWith('- ')) {
-      if (currentArray) {
-        currentArray.push(trimmed.substring(2));
+      // 配列要素の処理
+      if (trimmed.startsWith('- ')) {
+        if (currentArray) {
+          currentArray.push(trimmed.substring(2));
+        }
+        continue;
       }
-      continue;
-    }
 
-    // キー:値の処理
-    const colonIndex = trimmed.indexOf(':');
-    if (colonIndex > 0) {
-      const key = trimmed.substring(0, colonIndex).trim();
-      const value = trimmed.substring(colonIndex + 1).trim();
+      // キー:値の処理
+      const colonIndex = trimmed.indexOf(':');
+      if (colonIndex > 0) {
+        const key = trimmed.substring(0, colonIndex).trim();
+        const value = trimmed.substring(colonIndex + 1).trim();
 
-      if (value === '') {
-        // 配列の開始
-        currentKey = key;
-        currentArray = [];
-        frontmatter[key] = currentArray;
-      } else {
-        // 通常の値
-        currentKey = null;
-        currentArray = null;
-        
-        // 値の型変換
-        if (value === 'true') {
-          frontmatter[key] = true;
-        } else if (value === 'false') {
-          frontmatter[key] = false;
-        } else if (value.startsWith('"') && value.endsWith('"')) {
-          frontmatter[key] = value.slice(1, -1).replace(/\\"/g, '"');
+        if (value === '') {
+          // 配列の開始
+          currentKey = key;
+          currentArray = [];
+          frontmatter[key] = currentArray;
         } else {
-          frontmatter[key] = value;
+          // 通常の値
+          currentKey = null;
+          currentArray = null;
+          
+          // 値の型変換
+          if (value === 'true') {
+            frontmatter[key] = true;
+          } else if (value === 'false') {
+            frontmatter[key] = false;
+          } else if (value.startsWith('"') && value.endsWith('"')) {
+            frontmatter[key] = value.slice(1, -1).replace(/\\"/g, '"');
+          } else {
+            frontmatter[key] = value;
+          }
         }
       }
     }
+  } else {
+    // フロントマターがない場合
+    console.log(`No frontmatter found in ${filename}, generating defaults`);
+    
+    // ファイル名からタイトルを抽出（拡張子を除く）
+    const titleFromFilename = filename.replace('.md', '');
+    
+    frontmatter = {
+      title: titleFromFilename,
+      type: 'Record', // デフォルトタイプ
+      tags: []
+    };
   }
 
   // Cardオブジェクトの構築
@@ -264,13 +279,27 @@ const markdownToCard = (markdown: string, filename: string): Card | null => {
       cardType = frontmatter.type as CardType;
     }
 
+    // IDの生成（フロントマターにない場合はファイル名から生成）
+    let cardId = frontmatter.id;
+    if (!cardId) {
+      // ファイル名から生成（拡張子を除く）
+      cardId = filename.replace('.md', '').replace(/[^a-z0-9]/gi, '_');
+      // または新しいIDを生成
+      if (!cardId || cardId.length < 3) {
+        cardId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+      }
+      console.log(`Generated ID for ${filename}: ${cardId}`);
+    }
+
+    const now = Date.now();
+    
     const card: Card = {
-      id: frontmatter.id || filename.replace('.md', ''),
+      id: cardId,
       type: cardType,
-      title: frontmatter.title || 'Untitled',
+      title: frontmatter.title || filename.replace('.md', '') || 'Untitled',
       body: body.trim(),
-      createdAt: frontmatter.created ? new Date(frontmatter.created).getTime() : Date.now(),
-      updatedAt: frontmatter.updated ? new Date(frontmatter.updated).getTime() : Date.now(),
+      createdAt: frontmatter.created ? new Date(frontmatter.created).getTime() : now,
+      updatedAt: frontmatter.updated ? new Date(frontmatter.updated).getTime() : now,
       stacks: frontmatter.tags || [],
       completed: frontmatter.completed || false,
       isDeleted: frontmatter.deleted || false,
