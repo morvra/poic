@@ -850,8 +850,33 @@ export default function App() {
   const confirmBatchDelete = () => { setCards(cards.map(c => selectedCardIds.has(c.id) ? { ...c, isDeleted: true, deletedAt: Date.now(), updatedAt: Date.now() } : c)); setSelectedCardIds(new Set()); setIsSelectionMode(false); setShowBatchDeleteConfirm(false); };
   const handleBatchAddTag = () => { if (!batchTagInput.trim()) return; const tagToAdd = batchTagInput.trim(); setCards(cards.map(c => { if (selectedCardIds.has(c.id)) { const currentStacks = c.stacks || []; if (!currentStacks.includes(tagToAdd)) { return { ...c, stacks: [...currentStacks, tagToAdd], updatedAt: Date.now() }; } } return c; })); setBatchTagInput(''); };
   const handleBatchRemoveTag = (tag: string) => { setCards(cards.map(c => { if (selectedCardIds.has(c.id)) { const currentStacks = c.stacks || []; if (currentStacks.includes(tag)) { return { ...c, stacks: currentStacks.filter(s => s !== tag), updatedAt: Date.now() }; } } return c; })); };
-  const toggleGTDComplete = (id: string) => { setCards(cards.map(c => c.id === id ? { ...c, completed: !c.completed, updatedAt: Date.now() } : c)); };
-  const togglePin = (id: string) => { setCards(cards.map(c => { if (c.id === id) { const newPinnedState = c.isPinned ? false : Date.now(); return { ...c, isPinned: newPinnedState, updatedAt: Date.now() }; } return c; })); };
+
+  const toggleGTDComplete = (id: string) => { 
+    setCards(cards.map(c => c.id === id ? { ...c, completed: !c.completed, updatedAt: Date.now() } : c));
+    
+    // 同期メタデータに変更を記録
+    setSyncMetadata(prev => ({
+      ...prev,
+      localChanges: [...new Set([...prev.localChanges, id])]
+    }));
+  };
+
+  const togglePin = (id: string) => { 
+    setCards(cards.map(c => { 
+      if (c.id === id) { 
+        const newPinnedState = c.isPinned ? false : Date.now(); 
+        return { ...c, isPinned: newPinnedState, updatedAt: Date.now() }; 
+      } 
+      return c; 
+    }));
+    
+    // 同期メタデータに変更を記録
+    setSyncMetadata(prev => ({
+      ...prev,
+      localChanges: [...new Set([...prev.localChanges, id])]
+    }));
+  };
+
   const handleRandomCard = () => { if (filteredCards.length === 0) return; const randomIndex = Math.floor(Math.random() * filteredCards.length); const card = filteredCards[randomIndex]; const el = document.getElementById(`card-${card.id}`); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.style.transition = 'transform 0.2s, box-shadow 0.2s'; el.style.transform = 'scale(1.02)'; el.style.boxShadow = '0 0 0 4px rgba(6, 182, 212, 0.5)'; setTimeout(() => { el.style.transform = ''; el.style.boxShadow = ''; }, 1000); } };
   const handleHome = () => { setSearchQuery(''); setViewMode('All'); setActiveStack(null); setActiveType(null); };
   const handleExportOPML = () => { 
