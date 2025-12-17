@@ -351,7 +351,7 @@ export default function App() {
 
     const timeoutId = setTimeout(async () => {
       try {
-        console.log('Auto-sync triggered'); // デバッグログ
+        console.log('Auto-sync triggered'); 
         
         // クリーンアップ
         const cleanedCards = cleanupDeletedCards(cards, 30);
@@ -363,19 +363,19 @@ export default function App() {
 
         // 変更されたカードのみをアップロード
         if (syncMetadata.localChanges.length > 0) {
-          console.log('Syncing changes:', syncMetadata.localChanges); // デバッグログ
+          console.log('Syncing changes:', syncMetadata.localChanges);
           
           const changedCards = cleanedCards.filter(c => 
             syncMetadata.localChanges.includes(c.id)
           );
           
-          console.log('Changed cards to sync:', changedCards.length); // デバッグログ
+          console.log('Changed cards to sync:', changedCards.length);
           
           // 削除されたカードはDropboxからも削除
           const deletedCards = changedCards.filter(c => c.isDeleted);
           for (const card of deletedCards) {
             try {
-              console.log('Deleting card from Dropbox:', card.id, card.title); // デバッグログ
+              console.log('Deleting card from Dropbox:', card.id, card.title);
               await deleteCardFromDropbox(card);
             } catch (error) {
               console.error(`Failed to delete card ${card.id} from Dropbox:`, error);
@@ -386,14 +386,14 @@ export default function App() {
           const activeCards = changedCards.filter(c => !c.isDeleted);
           for (const card of activeCards) {
             try {
-              console.log('Uploading card to Dropbox:', card.id, card.title); // デバッグログ
+              console.log('Uploading card to Dropbox:', card.id, card.title);
               await uploadCardToDropbox(card);
             } catch (error) {
               console.error(`Failed to upload card ${card.id}:`, error);
             }
           }
           
-          console.log('Sync completed'); // デバッグログ
+          console.log('Sync completed');
           
           // 同期完了後、localChangesをクリア
           setSyncMetadata(prev => ({
@@ -490,11 +490,29 @@ export default function App() {
             if (!local) {
               console.log('New card from remote:', rc.id, rc.title);
               mergedMap.set(rc.id, rc);
-            } else if (rc.updatedAt > local.updatedAt) {
-              console.log('Updating card from remote:', rc.id, rc.title);
-              mergedMap.set(rc.id, rc);
             } else {
-              console.log('Keeping local version:', rc.id, rc.title);
+              // updatedAtを比較
+              const localTime = local.updatedAt;
+              const remoteTime = rc.updatedAt;
+              
+              console.log(`Comparing ${rc.id}:`, {
+                local: new Date(localTime).toISOString(),
+                remote: new Date(remoteTime).toISOString(),
+                diff: remoteTime - localTime
+              });
+              
+              if (remoteTime > localTime) {
+                console.log('→ Using remote version (newer)');
+                mergedMap.set(rc.id, rc);
+              } else if (remoteTime < localTime) {
+                console.log('→ Keeping local version (newer)');
+                // ローカルの方が新しい場合は、Dropboxに再アップロード
+                uploadCardToDropbox(local).catch(err => {
+                  console.error('Failed to sync local version to Dropbox:', err);
+                });
+              } else {
+                console.log('→ Same timestamp, keeping local');
+              }
             }
           });
           
@@ -520,6 +538,7 @@ export default function App() {
       setIsSyncing(false); 
     } 
   };
+
   const syncUpload = async (token: string, data: Card[]) => { if (!isDropboxConnected) return; setIsSyncing(true); try { await uploadToDropbox(data); } catch (error) { console.error('Dropbox Upload Error:', error); if (error instanceof Error && (error.message.includes('Token refresh failed') || error.message.includes('Unauthorized'))) { handleDisconnectDropbox(); } } finally { setIsSyncing(false); } };
 
   const handleManualSync = async () => { 

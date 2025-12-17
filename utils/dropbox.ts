@@ -428,9 +428,9 @@ export const uploadToDropbox = async (cards: Card[]): Promise<void> => {
 };
 
 /**
- * Dropboxからカードをダウンロード
+ * Dropboxからカードをダウンロード（ファイルのメタデータも取得）
  */
-const downloadCardFromDropbox = async (token: string, filePath: string): Promise<Card | null> => {
+const downloadCardFromDropbox = async (token: string, filePath: string, serverModified?: string): Promise<Card | null> => {
   try {
     const response = await fetch('https://content.dropboxapi.com/2/files/download', {
       method: 'POST',
@@ -455,12 +455,45 @@ const downloadCardFromDropbox = async (token: string, filePath: string): Promise
     const markdown = await response.text();
     const filename = filePath.split('/').pop() || '';
     
+    // Dropboxのレスポンスヘッダーからメタデータを取得
+    const dropboxMetadata = response.headers.get('Dropbox-API-Result');
+    let fileModifiedTime: number | null = null;
+    
+    if (dropboxMetadata) {
+      try {
+        const metadata = JSON.parse(dropboxMetadata);
+        if (metadata.server_modified) {
+          fileModifiedTime = new Date(metadata.server_modified).getTime();
+          console.log('Dropbox file modified time:', new Date(fileModifiedTime).toISOString());
+        }
+      } catch (e) {
+        console.warn('Failed to parse Dropbox metadata:', e);
+      }
+    }
+    
+    // serverModifiedパラメータからも取得可能
+    if (!fileModifiedTime && serverModified) {
+      fileModifiedTime = new Date(serverModified).getTime();
+    }
+    
     console.log('Downloaded file:', filename);
     
     const card = markdownToCard(markdown, filename);
     
+    if (card && fileModifiedTime) {
+      // Dropboxのファイル更新時刻をカードのupdatedAtとして使用
+      // フロントマターのupdatedよりもDropboxのファイル更新時刻を優先
+      const frontmatterUpdated = card.updatedAt;
+      
+      // Dropboxで編集された可能性がある場合は、ファイルの更新時刻を使用
+      if (fileModifiedTime > frontmatterUpdated) {
+        console.log(`File was modified on Dropbox (${new Date(fileModifiedTime).toISOString()}), using file timestamp`);
+        card.updatedAt = fileModifiedTime;
+      }
+    }
+    
     if (card) {
-      console.log('Parsed card:', card.id, card.title);
+      console.log('Parsed card:', card.id, card.title, 'updatedAt:', new Date(card.updatedAt).toISOString());
     } else {
       console.error('Failed to parse card from:', filename);
     }
@@ -480,9 +513,8 @@ export const downloadFromDropbox = async (): Promise<Card[]> => {
   if (!token) throw new Error('Unauthorized');
 
   try {
-    console.log('Downloading from Dropbox...'); // デバッグログ
+    console.log('Downloading from Dropbox...');
     
-    // 空文字列の場合はルートディレクトリを指定
     const folderPath = CARDS_FOLDER || '';
     
     const listResponse = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
@@ -497,7 +529,7 @@ export const downloadFromDropbox = async (): Promise<Card[]> => {
       }),
     });
 
-    console.log('List response status:', listResponse.status); // デバッグログ
+    console.log('List response status:', listResponse.status);
 
     if (!listResponse.ok) {
       if (listResponse.status === 409) {
@@ -505,14 +537,14 @@ export const downloadFromDropbox = async (): Promise<Card[]> => {
         return [];
       }
       const errorText = await listResponse.text();
-      console.error('List folder error:', errorText); // デバッグログ
+      console.error('List folder error:', errorText);
       throw new Error('Failed to list root directory');
     }
 
     const listData = await listResponse.json();
     const entries = listData.entries || [];
     
-    console.log('Found entries:', entries.length); // デバッグログ
+    console.log('Found entries:', entries.length);
 
     // Markdownファイルのみをフィルタ
     const markdownFiles = entries.filter((entry: any) => 
@@ -520,8 +552,8 @@ export const downloadFromDropbox = async (): Promise<Card[]> => {
       entry.name.endsWith('.md')
     );
     
-    console.log('Markdown files found:', markdownFiles.length); // デバッグログ
-    console.log('Files:', markdownFiles.map((f: any) => f.name)); // デバッグログ
+    console.log('Markdown files found:', markdownFiles.length);
+    console.log('Files:', markdownFiles.map((f: any) => `${f.name} (modified: ${f.server_modified})`));
 
     // 各ファイルをダウンロード（並列処理）
     const batchSize = 5;
@@ -530,13 +562,13 @@ export const downloadFromDropbox = async (): Promise<Card[]> => {
     for (let i = 0; i < markdownFiles.length; i += batchSize) {
       const batch = markdownFiles.slice(i, i + batchSize);
       const batchResults = await Promise.all(
-        batch.map((file: any) => downloadCardFromDropbox(token, file.path_lower))
+        batch.map((file: any) => downloadCardFromDropbox(token, file.path_lower, file.server_modified))
       );
       
       cards.push(...batchResults.filter((card): card is Card => card !== null));
     }
 
-    console.log('Downloaded cards:', cards.length); // デバッグログ
+    console.log('Downloaded cards:', cards.length);
     return cards;
   } catch (error) {
     console.error('Error downloading from Dropbox:', error);
