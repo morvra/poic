@@ -575,12 +575,12 @@ export const Editor: React.FC<EditorProps> = ({
         </div>
 
         {/* Body Editor with Click-to-Edit */}
-        <div className="relative min-h-[100px]">
+        <div className="relative min-h-[150px]">
             {isEditingBody ? (
                 <>
                     <textarea
                         ref={bodyRef}
-                        className="block w-full min-h-[100px] resize-none border-none focus:outline-none bg-transparent text-[17px] font-sans leading-relaxed text-ink/90 placeholder-stone-300 overflow-hidden"
+                        className="block w-full min-h-[150px] resize-none border-none focus:outline-none bg-transparent text-[17px] font-sans leading-relaxed text-ink/90 placeholder-stone-300 overflow-hidden"
                         placeholder="内容を入力... (Alt+T: タイムスタンプ, [[ : リンク)"
                         value={body}
                         onChange={handleBodyChange}
@@ -627,7 +627,7 @@ export const Editor: React.FC<EditorProps> = ({
                         if (!isMouseDownRef.current) setIsEditingBody(true);
                     }} 
                     tabIndex={0} 
-                    className="w-full min-h-[100px] cursor-text outline-none"
+                    className="w-full min-h-[150px] cursor-text outline-none"
                 >
                     <CardRenderer 
                         content={body || '内容なし'} 
