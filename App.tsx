@@ -1096,14 +1096,13 @@ return (
               </div>
           </div>
 
-          {/* モーダルオーバーレイ - サイドバー+メイン画面全体をカバー (z-index 50) */}
+          {/* モーダルオーバーレイ - サイドバー+メイン画面（右側カード除く） (z-index 50) */}
           {activeModalCard && (
               <div 
-                  className="absolute inset-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-stone-900/20 backdrop-blur-[1px] animate-in fade-in duration-200"
+                  className="absolute top-0 bottom-0 left-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-stone-900/20 backdrop-blur-[1px] animate-in fade-in duration-200"
                   onClick={(e) => { if (e.target === e.currentTarget) handleCloseModal(); }}
                   style={{
-                      left: isDesktopSidebarOpen ? '0' : '0',
-                      right: activeSideCard ? '0' : '0'
+                      right: activeSideCard ? '500px' : '0'
                   }}
               >
                   <div className="w-full max-w-2xl h-auto max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl bg-paper pointer-events-auto">
