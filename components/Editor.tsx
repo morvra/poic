@@ -425,7 +425,7 @@ export const Editor: React.FC<EditorProps> = ({
   };
 
   return (
-    <div className={`bg-paper w-full max-w-full h-auto max-h-full flex flex-col md:rounded-lg shadow-none overflow-hidden relative border-t-[8px] ${TYPE_BORDER_COLOR[type]}`}>
+    <div className={`bg-paper w-full max-w-full h-auto max-h-full flex flex-col shadow-none overflow-hidden relative border-t-[8px] ${TYPE_BORDER_COLOR[type]}`}>
       
       {/* Delete Confirmation Overlay ... */}
       {showDeleteConfirm && (
