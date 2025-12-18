@@ -911,29 +911,40 @@ export default function App() {
 
   const handleRandomCard = () => { if (filteredCards.length === 0) return; const randomIndex = Math.floor(Math.random() * filteredCards.length); const card = filteredCards[randomIndex]; const el = document.getElementById(`card-${card.id}`); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.style.transition = 'transform 0.2s, box-shadow 0.2s'; el.style.transform = 'scale(1.02)'; el.style.boxShadow = '0 0 0 4px rgba(6, 182, 212, 0.5)'; setTimeout(() => { el.style.transform = ''; el.style.boxShadow = ''; }, 1000); } };
   
-  const handleHome = () => { 
-    const isAlreadyHome = viewMode === 'All' && !searchQuery && !activeStack && !activeType;
+const handleHome = () => { 
+  const isAlreadyHome = viewMode === 'All' && !searchQuery && !activeStack && !activeType;
+  
+  console.log('handleHome called:', { 
+    viewMode, 
+    searchQuery, 
+    activeStack, 
+    activeType, 
+    isAlreadyHome 
+  });
+  
+  if (isAlreadyHome) {
+    // すでにDock画面にいる場合は最上部にスクロール
+    console.log('Already home, scrolling to top');
+    if (mainScrollRef.current) {
+      mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  } else {
+    // Dock画面に戻る
+    console.log('Returning to Dock');
+    setSearchQuery(''); 
+    setViewMode('All'); 
+    setActiveStack(null); 
+    setActiveType(null);
     
-    if (isAlreadyHome) {
-      // すでにDock画面にいる場合は最上部にスクロール
+    // 状態変更後にスクロール
+    setTimeout(() => {
+      console.log('Scrolling after state update');
       if (mainScrollRef.current) {
         mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
       }
-    } else {
-      // Dock画面に戻る
-      setSearchQuery(''); 
-      setViewMode('All'); 
-      setActiveStack(null); 
-      setActiveType(null);
-      
-      // 状態変更後にスクロール（少し遅延させる）
-      setTimeout(() => {
-        if (mainScrollRef.current) {
-          mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      }, 50);
-    }
-  };
+    }, 50);
+  }
+};
 
   const handleExportOPML = () => { 
       let exportCards = filteredCards; if (isSelectionMode && selectedCardIds.size > 0) { exportCards = cards.filter(c => !c.isDeleted && selectedCardIds.has(c.id)); }
