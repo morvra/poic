@@ -925,6 +925,13 @@ export default function App() {
       setViewMode('All'); 
       setActiveStack(null); 
       setActiveType(null);
+      
+      // 状態変更後にスクロール（少し遅延させる）
+      setTimeout(() => {
+        if (mainScrollRef.current) {
+          mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 50);
     }
   };
 
