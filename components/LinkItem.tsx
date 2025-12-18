@@ -29,20 +29,25 @@ export const LinkItem: React.FC<LinkItemProps> = ({
   return (
     <div className="border-b border-stone-100 last:border-b-0">
       <div className="flex items-center gap-2 py-2 px-3 hover:bg-stone-50 transition-colors group">
-        {/* 展開アイコン + 関連件数 */}
-        <button
-          onClick={handleToggleExpand}
-          className="flex items-center gap-1 text-stone-400 hover:text-stone-600 transition-colors shrink-0"
-        >
-          {isExpanded ? (
-            <ChevronDown size={16} />
-          ) : (
-            <ChevronRight size={16} />
-          )}
-          <span className="text-xs text-stone-400">
-            ({filteredLinks.length})
-          </span>
-        </button>
+        {/* 関連が0件の場合は展開ボタン表示しない */}
+        {filteredLinks.length > 0 ? (
+          <button
+            onClick={handleToggleExpand}
+            className="flex items-center gap-1 text-stone-400 hover:text-stone-600 transition-colors shrink-0"
+          >
+            {isExpanded ? (
+              <ChevronDown size={16} />
+            ) : (
+              <ChevronRight size={16} />
+            )}
+            <span className="text-xs text-stone-400">
+              ({filteredLinks.length})
+            </span>
+          </button>
+        ) : (
+          // 0件の場合は空白スペースを確保（レイアウト崩れ防止）
+          <div className="w-6 shrink-0" />
+        )}
 
         {/* カードタイトル */}
         <button
