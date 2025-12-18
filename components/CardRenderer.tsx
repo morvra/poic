@@ -23,7 +23,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({ content, onLinkClick
               e.stopPropagation(); 
               onLinkClick(term, e); 
           }}
-          className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer font-medium rounded-sm inline-flex items-center"
+          className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer font-medium rounded-sm inline"
         >
           <span className="text-blue-300 select-none">[[</span>
           {term}
