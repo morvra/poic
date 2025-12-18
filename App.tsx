@@ -928,7 +928,7 @@ export default function App() {
     );
   }
 
-  return (
+return (
     <div className="h-screen flex font-sans text-ink bg-stone-200 overflow-hidden">
       
       {isSidebarOpen && <div className="fixed inset-0 bg-black/20 z-40 md:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />}
@@ -936,7 +936,7 @@ export default function App() {
       {showBatchTagModal && (<div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]"><div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200"><h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2"><Tag size={20} />タグの管理</h3><div className="mb-4"><label className="text-xs font-bold text-stone-400 uppercase block mb-1">タグを追加</label><div className="flex gap-2"><input type="text" className="flex-1 border border-stone-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" placeholder="タグ名を入力" value={batchTagInput} onChange={(e) => setBatchTagInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleBatchAddTag()} /><button onClick={handleBatchAddTag} className="bg-stone-800 text-white px-3 py-1.5 rounded text-sm hover:bg-stone-900 transition-colors">追加</button></div></div><div className="mb-6"><label className="text-xs font-bold text-stone-400 uppercase block mb-2">現在のタグ (クリックして削除)</label><div className="flex flex-wrap gap-2">{commonStacks.map(stack => (<button key={stack} onClick={() => handleBatchRemoveTag(stack)} className="bg-stone-100 text-stone-600 px-2 py-1 rounded text-sm hover:bg-red-100 hover:text-red-600 hover:line-through transition-colors">#{stack}</button>))} {commonStacks.length === 0 && <span className="text-sm text-stone-400 italic">タグなし</span>}</div></div><div className="flex justify-end"><button onClick={() => setShowBatchTagModal(false)} className="px-4 py-2 rounded-md bg-stone-100 text-stone-600 hover:bg-stone-200 font-medium transition-colors">閉じる</button></div></div></div>)}
       {showBatchDeleteConfirm && (<div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]"><div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200"><div className="flex flex-col items-center text-center gap-3 mb-6"><div className="bg-red-100 p-3 rounded-full text-red-600"><AlertTriangle size={32} /></div><h3 className="text-lg font-bold text-stone-800">カードを削除しますか？</h3><p className="text-sm text-stone-500">{selectedCardIds.size}枚のカードを削除します。この操作は元に戻せません。</p></div><div className="flex gap-3"><button onClick={() => setShowBatchDeleteConfirm(false)} className="flex-1 px-4 py-2 rounded-md bg-stone-100 text-stone-600 hover:bg-stone-200 font-medium transition-colors">キャンセル</button><button onClick={confirmBatchDelete} className="flex-1 px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 font-bold transition-colors shadow-sm">削除する</button></div></div></div>)}
 
-      <aside className={`fixed top-0 bottom-0 left-0 w-60 bg-paper-dark border-r border-stone-300 flex flex-col z-50 shadow-2xl md:shadow-none ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 ${isDesktopSidebarOpen ? 'md:w-60' : 'md:w-0 md:border-r-0 md:overflow-hidden'} ${activeModalCard ? 'blur-sm pointer-events-none select-none' : ''}`}>
+      <aside className={`fixed top-0 bottom-0 left-0 w-60 bg-paper-dark border-r border-stone-300 flex flex-col z-50 shadow-2xl md:shadow-none ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 ${isDesktopSidebarOpen ? 'md:w-60' : 'md:w-0 md:border-r-0 md:overflow-hidden'}`}>
         <div className="w-60 flex flex-col h-full">
             <div className="p-6 border-b border-stone-200/50 flex justify-between items-center"><div><h1 className="font-serif font-bold text-2xl tracking-tighter text-stone-800">d-PoIC</h1><p className="text-xs text-stone-400 mt-1 uppercase tracking-widest">Pile of Index Cards</p></div><button className="md:hidden text-stone-500" onClick={() => setIsSidebarOpen(false)}><X size={20} /></button></div>
             <nav className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -951,9 +951,9 @@ export default function App() {
 
       <div className="flex-1 flex overflow-hidden relative">
           {/* 左側のメイン領域 */}
-          <div className={`flex flex-col overflow-hidden transition-all duration-200 ${activeSideCard ? 'flex-1' : 'w-full'}`}>
-              {/* ヘッダー - 左側領域専用 */}
-              <header className="flex-shrink-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-30 border-b border-stone-300/30">
+          <div className={`flex flex-col overflow-hidden transition-all duration-200 ${activeSideCard ? 'flex-1' : 'w-full'} relative`}>
+              {/* ヘッダー - 左側領域専用 - z-indexを10に設定 */}
+              <header className={`flex-shrink-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-10 border-b border-stone-300/30 ${activeModalCard ? 'blur-sm pointer-events-none select-none' : ''}`}>
                   <div className="flex items-center gap-3 flex-1">
                       <button 
                           onClick={toggleSidebar} 
@@ -1058,74 +1058,75 @@ export default function App() {
                   </div>
               </header>
               
-              {/* メイン領域のコンテナ - モーダル表示用 */}
-              <div className="flex-1 overflow-hidden relative">
-                  {/* メインスクロールエリア */}
-                  <div 
-                      ref={mainScrollRef}
-                      className="h-full overflow-y-scroll bg-stone-200"
-                      style={{ 
-                          WebkitOverflowScrolling: 'touch'
-                      }}
-                  >
-                      <div className="px-2 sm:px-6 w-full max-w-[1920px] mx-auto pb-20 pt-4">
-                          <div className="mb-4 flex items-center justify-between pl-2 border-l-4 border-stone-400">
-                              <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">{viewMode === 'All' && (searchQuery ? `検索: "${searchQuery}"` : 'Dock (全カード)')}{viewMode === 'Stack' && `タグ: ${activeStack}`}{viewMode === 'Type' && `分類: ${activeType}`}{viewMode === 'GTD' && 'アクション'}</h2>
-                              <div className="flex items-center gap-2"><button onClick={handleExportOPML} title="OPMLをコピー" className="flex items-center gap-1 text-xs font-mono text-stone-500 hover:text-stone-800 bg-stone-300/30 hover:bg-stone-300/60 px-2 py-1 rounded transition-colors"><Copy size={12} /><span className="hidden sm:inline">OPML</span></button><span className="text-xs font-mono text-stone-500 bg-stone-300/50 px-2 py-1 rounded">{filteredCards.length} cards</span></div>
-                          </div>
-
-                          <div className={viewMode === 'GTD' ? '' : gridClasses}>
-                              {pinnedCards.length > 0 && (<><div className="col-span-full flex items-center gap-2 mb-2"><Pin size={16} className="text-stone-400" /><span className="text-xs font-bold text-stone-400 uppercase tracking-wider">Pinned</span><div className="h-px flex-1 bg-stone-300/50"></div></div>{pinnedCards.map(card => (<CardItem key={card.id} domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} />))}<div className="col-span-full h-4"></div></>)}
-
-                              {viewMode === 'GTD' && gtdGroups ? (
-                                  <div className="col-span-full space-y-6">{(Object.entries(gtdGroups) as [string, Card[]][]).map(([groupName, groupCards]) => (groupCards.length > 0 && (<div key={groupName}><h3 className={`text-xs font-bold uppercase tracking-wider mb-2 pl-2 border-l-2 ${groupName === '期限切れ' ? 'border-red-500 text-red-500' : groupName === '今日' ? 'border-green-500 text-green-600' : 'border-stone-400 text-stone-500'}`}>{groupName}</h3><div className={gridClasses + " items-start"}> {groupCards.map((card) => (<CardItem key={card.id} domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} />))}</div></div>)))}</div>
-                              ) : (
-                                  <>
-                                      {unpinnedCards.map((card, index) => {
-                                          const prevCard = unpinnedCards[index - 1];
-                                          const currentMonth = new Date(card.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' });
-                                          const prevMonth = prevCard ? new Date(prevCard.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' }) : null;
-                                          const showDivider = index > 0 && currentMonth !== prevMonth;
-                                          return (<React.Fragment key={card.id}>{showDivider && (<div className="col-span-full flex items-center gap-2 my-4 px-2 opacity-60"><div className="h-px flex-1 bg-stone-300"></div><span className="text-xs font-mono font-bold text-stone-500">{currentMonth}</span><div className="h-px flex-1 bg-stone-300"></div></div>)}<CardItem domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} /></React.Fragment>);
-                                      })}
-                                      {unpinnedCards.length === 0 && (<div className="col-span-full text-center py-20 opacity-50"><Library size={48} className="mx-auto mb-4 text-stone-400" /><p className="text-stone-500 font-serif italic">カードが見つかりません。</p></div>)}
-                                  </>
-                              )}
-                          </div>
+              {/* メインスクロールエリア */}
+              <div 
+                  ref={mainScrollRef}
+                  className={`flex-1 overflow-y-scroll bg-stone-200 ${activeModalCard ? 'blur-sm pointer-events-none select-none' : ''}`}
+                  style={{ 
+                      WebkitOverflowScrolling: 'touch'
+                  }}
+              >
+                  <div className="px-2 sm:px-6 w-full max-w-[1920px] mx-auto pb-20 pt-4">
+                      <div className="mb-4 flex items-center justify-between pl-2 border-l-4 border-stone-400">
+                          <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">{viewMode === 'All' && (searchQuery ? `検索: "${searchQuery}"` : 'Dock (全カード)')}{viewMode === 'Stack' && `タグ: ${activeStack}`}{viewMode === 'Type' && `分類: ${activeType}`}{viewMode === 'GTD' && 'アクション'}</h2>
+                          <div className="flex items-center gap-2"><button onClick={handleExportOPML} title="OPMLをコピー" className="flex items-center gap-1 text-xs font-mono text-stone-500 hover:text-stone-800 bg-stone-300/30 hover:bg-stone-300/60 px-2 py-1 rounded transition-colors"><Copy size={12} /><span className="hidden sm:inline">OPML</span></button><span className="text-xs font-mono text-stone-500 bg-stone-300/50 px-2 py-1 rounded">{filteredCards.length} cards</span></div>
                       </div>
-                      
-                      {!isSelectionMode && (<button onClick={openNewCardEditor} className="fixed bottom-6 right-6 z-40 bg-stone-800 hover:bg-stone-900 text-white p-4 rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center"><Plus size={24} /></button>)}
+
+                      <div className={viewMode === 'GTD' ? '' : gridClasses}>
+                          {pinnedCards.length > 0 && (<><div className="col-span-full flex items-center gap-2 mb-2"><Pin size={16} className="text-stone-400" /><span className="text-xs font-bold text-stone-400 uppercase tracking-wider">Pinned</span><div className="h-px flex-1 bg-stone-300/50"></div></div>{pinnedCards.map(card => (<CardItem key={card.id} domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} />))}<div className="col-span-full h-4"></div></>)}
+
+                          {viewMode === 'GTD' && gtdGroups ? (
+                              <div className="col-span-full space-y-6">{(Object.entries(gtdGroups) as [string, Card[]][]).map(([groupName, groupCards]) => (groupCards.length > 0 && (<div key={groupName}><h3 className={`text-xs font-bold uppercase tracking-wider mb-2 pl-2 border-l-2 ${groupName === '期限切れ' ? 'border-red-500 text-red-500' : groupName === '今日' ? 'border-green-500 text-green-600' : 'border-stone-400 text-stone-500'}`}>{groupName}</h3><div className={gridClasses + " items-start"}> {groupCards.map((card) => (<CardItem key={card.id} domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} />))}</div></div>)))}</div>
+                          ) : (
+                              <>
+                                  {unpinnedCards.map((card, index) => {
+                                      const prevCard = unpinnedCards[index - 1];
+                                      const currentMonth = new Date(card.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' });
+                                      const prevMonth = prevCard ? new Date(prevCard.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' }) : null;
+                                      const showDivider = index > 0 && currentMonth !== prevMonth;
+                                      return (<React.Fragment key={card.id}>{showDivider && (<div className="col-span-full flex items-center gap-2 my-4 px-2 opacity-60"><div className="h-px flex-1 bg-stone-300"></div><span className="text-xs font-mono font-bold text-stone-500">{currentMonth}</span><div className="h-px flex-1 bg-stone-300"></div></div>)}<CardItem domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} /></React.Fragment>);
+                                  })}
+                                  {unpinnedCards.length === 0 && (<div className="col-span-full text-center py-20 opacity-50"><Library size={48} className="mx-auto mb-4 text-stone-400" /><p className="text-stone-500 font-serif italic">カードが見つかりません。</p></div>)}
+                              </>
+                          )}
+                      </div>
                   </div>
-
-                  {/* 左側領域内のモーダル */}
-                  {activeModalCard && (
-                      <div 
-                          className="absolute inset-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-stone-900/20 backdrop-blur-[1px] animate-in fade-in duration-200"
-                          onClick={(e) => { if (e.target === e.currentTarget) handleCloseModal(); }}
-                      >
-                          <div className="w-full max-w-2xl h-auto max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl rounded-lg bg-paper pointer-events-auto">
-                              <Editor 
-                                  initialCard={activeModalCard}
-                                  allTitles={allTitles}
-                                  availableStacks={allStacks.map(s => s.name)}
-                                  dateFormat={dateFormat}
-                                  onSave={(data, close) => {
-                                      handleSaveCard(data);
-                                      if (close) handleCloseModal();
-                                  }}
-                                  onCancel={handleCloseModal}
-                                  onDelete={() => handleDeleteCard(activeModalCard.id)}
-                                  onNavigate={(term, e) => handleLinkClick(term, e)} 
-                                  backlinks={modalBacklinks} 
-                                  onMoveToSide={() => handleMoveToSide(activeModalCard.id)}
-                              />
-                          </div>
-                      </div>
-                  )}
+                  
+                  {!isSelectionMode && (<button onClick={openNewCardEditor} className="fixed bottom-6 right-6 z-40 bg-stone-800 hover:bg-stone-900 text-white p-4 rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center"><Plus size={24} /></button>)}
               </div>
           </div>
 
-          {/* 右側のカードエディタ - 画面全体の高さ */}
+          {/* モーダルオーバーレイ - サイドバー+メイン画面全体をカバー (z-index 50) */}
+          {activeModalCard && (
+              <div 
+                  className="absolute inset-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-stone-900/20 backdrop-blur-[1px] animate-in fade-in duration-200"
+                  onClick={(e) => { if (e.target === e.currentTarget) handleCloseModal(); }}
+                  style={{
+                      left: isDesktopSidebarOpen ? '0' : '0',
+                      right: activeSideCard ? '0' : '0'
+                  }}
+              >
+                  <div className="w-full max-w-2xl h-auto max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl bg-paper pointer-events-auto">
+                      <Editor 
+                          initialCard={activeModalCard}
+                          allTitles={allTitles}
+                          availableStacks={allStacks.map(s => s.name)}
+                          dateFormat={dateFormat}
+                          onSave={(data, close) => {
+                              handleSaveCard(data);
+                              if (close) handleCloseModal();
+                          }}
+                          onCancel={handleCloseModal}
+                          onDelete={() => handleDeleteCard(activeModalCard.id)}
+                          onNavigate={(term, e) => handleLinkClick(term, e)} 
+                          backlinks={modalBacklinks} 
+                          onMoveToSide={() => handleMoveToSide(activeModalCard.id)}
+                      />
+                  </div>
+              </div>
+          )}
+
+          {/* 右側のカードエディタ - 画面全体の高さ (z-index 40) */}
           {activeSideCard && (
             <aside className="w-full md:w-[500px] md:flex-none border-l border-stone-300 bg-paper shadow-xl z-40 overflow-hidden transition-all duration-200 ease-in-out h-screen">
                 <div className="h-full">
