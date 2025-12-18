@@ -925,13 +925,6 @@ export default function App() {
       setViewMode('All'); 
       setActiveStack(null); 
       setActiveType(null);
-      
-      // 戻った後に最上部にスクロール
-      setTimeout(() => {
-        if (mainScrollRef.current) {
-          mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      }, 50);
     }
   };
 
