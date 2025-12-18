@@ -448,7 +448,7 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => { 
       // エディターやサイドバーが開いている時、入力フィールドにフォーカスがある時はスキップ
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return; 
-      if (activeModalCardId || activeSideCardId) return;
+      if (activeModalCardId) return;
 
       // n: 新規カード作成
       if (e.key === 'n') { 
@@ -1153,7 +1153,7 @@ return (
                       </div>
                   </div>
                   
-                  {!isSelectionMode && (<button onClick={openNewCardEditor} className="fixed bottom-6 right-6 z-40 bg-stone-800 hover:bg-stone-900 text-white p-4 rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center"><Plus size={24} /></button>)}
+                  {!isSelectionMode && !activeModalCardId && (<button onClick={openNewCardEditor} className="fixed bottom-6 right-6 z-40 bg-stone-800 hover:bg-stone-900 text-white p-4 rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center" style={{ right: activeSideCard ? 'calc(500px + 1.5rem)' : '1.5rem' }}><Plus size={24} /></button>)}
               </div>
           </div>
 
