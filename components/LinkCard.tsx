@@ -9,10 +9,10 @@ interface LinkCardProps {
 }
 
 const TYPE_COLORS = {
-  [CardType.Record]: 'border-l-blue-500 bg-blue-50/30',
-  [CardType.Discovery]: 'border-l-red-500 bg-red-50/30',
-  [CardType.GTD]: 'border-l-green-500 bg-green-50/30',
-  [CardType.Reference]: 'border-l-yellow-500 bg-yellow-50/30',
+  [CardType.Record]: 'border-t-blue-500 bg-blue-50/30',
+  [CardType.Discovery]: 'border-t-red-500 bg-red-50/30',
+  [CardType.GTD]: 'border-t-green-500 bg-green-50/30',
+  [CardType.Reference]: 'border-t-yellow-500 bg-yellow-50/30',
 };
 
 export const LinkCard: React.FC<LinkCardProps> = ({ 
@@ -36,7 +36,7 @@ export const LinkCard: React.FC<LinkCardProps> = ({
 
   return (
     <div 
-      className={`border-l-4 ${TYPE_COLORS[card.type]} rounded-r-md p-3 cursor-pointer hover:bg-stone-50 transition-colors h-full flex flex-col`}
+      className={`border-t-4 ${TYPE_COLORS[card.type]} p-3 cursor-pointer hover:bg-stone-50 transition-colors h-full flex flex-col`}
       onClick={(e) => onClick(card.title, e)}
     >
       {/* タイトル */}
@@ -52,7 +52,6 @@ export const LinkCard: React.FC<LinkCardProps> = ({
       {/* 2-hop links */}
       {links.length > 0 && (
         <div className="flex items-center gap-1 flex-wrap pt-2 border-t border-stone-200/50">
-          <span className="text-[10px] text-stone-400">→</span>
           {links.slice(0, 4).map((link, idx) => (
             <span 
               key={idx}
