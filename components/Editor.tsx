@@ -3,6 +3,7 @@ import { Card, CardType } from '../types';
 import { formatTimeShort, formatTimestampByPattern } from '../utils';
 import { CardRenderer } from './CardRenderer';
 import { LinkCard } from './LinkCard';
+import { LinkItem } from './LinkItem';
 import { Calendar, Save, X, Trash2, Clock, CheckCircle, Circle, Link as LinkIcon, AlertTriangle, FileText, Lightbulb, CheckSquare, BookOpen, Pin, ArrowRightFromLine } from 'lucide-react';
 
 interface EditorProps {
@@ -19,7 +20,6 @@ interface EditorProps {
   backlinks?: Card[];
 }
 
-// ... (TypeIcon unchanged) ...
 const TypeIcon = ({ type, className }: { type: CardType, className?: string }) => {
     switch (type) {
         case CardType.Record: return <FileText size={16} className={className} />;
@@ -42,7 +42,7 @@ export const Editor: React.FC<EditorProps> = ({
   onMoveToSide,
   backlinks = [] 
 }) => {
-  // ... (State definitions unchanged) ...
+  // state
   const [type, setType] = useState<CardType>(initialCard?.type || CardType.Record);
   const [title, setTitle] = useState(initialCard?.title || '');
   const [body, setBody] = useState(initialCard?.body || '');
@@ -92,8 +92,65 @@ export const Editor: React.FC<EditorProps> = ({
     ));
   }, [body]);
 
-  
-  // ... (Effects unchanged) ...
+  // 各outgoingLinkについて、関連するカードタイトルを集約
+  const outgoingLinksWithRelated = useMemo(() => {
+    return outgoingLinks.map(link => {
+      const linkedCard = allCards.find(c => !c.isDeleted && c.title === link);
+      
+      if (!linkedCard) {
+        return { title: link, relatedLinks: [] };
+      }
+
+      // このカードが参照しているカード（参照先）
+      const linkMatches = linkedCard.body.match(/\[\[([^\]]+)\]\]/g) || [];
+      const outgoing = Array.from(new Set(
+        linkMatches.map(match => match.slice(2, -2))
+      ));
+
+      // このカードを参照しているカード（参照元）
+      const escapedTitle = linkedCard.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`\\[\\[${escapedTitle}\\]\\]`, 'i');
+      const incoming = allCards
+        .filter(c => !c.isDeleted && c.id !== linkedCard.id && regex.test(c.body))
+        .map(c => c.title);
+
+      // 参照先と参照元を統合（重複除去）
+      const allRelated = Array.from(new Set([...outgoing, ...incoming]));
+
+      return {
+        title: link,
+        relatedLinks: allRelated
+      };
+    });
+  }, [outgoingLinks, allCards]);
+
+  // 各backlinkについて、関連するカードタイトルを集約
+  const backlinksWithRelated = useMemo(() => {
+    return backlinks.map(backlinkCard => {
+      // このカードが参照しているカード（参照先）
+      const linkMatches = backlinkCard.body.match(/\[\[([^\]]+)\]\]/g) || [];
+      const outgoing = Array.from(new Set(
+        linkMatches.map(match => match.slice(2, -2))
+      ));
+
+      // このカードを参照しているカード（参照元）
+      const escapedTitle = backlinkCard.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`\\[\\[${escapedTitle}\\]\\]`, 'i');
+      const incoming = allCards
+        .filter(c => !c.isDeleted && c.id !== backlinkCard.id && regex.test(c.body))
+        .map(c => c.title);
+
+      // 参照先と参照元を統合（重複除去）
+      const allRelated = Array.from(new Set([...outgoing, ...incoming]));
+
+      return {
+        card: backlinkCard,
+        relatedLinks: allRelated
+      };
+    });
+  }, [backlinks, allCards]);
+
+  // ... (既存のuseEffectとhandler関数は変更なし) ...
   useEffect(() => {
     if (containerRef.current) {
         containerRef.current.scrollTop = 0;
@@ -102,7 +159,7 @@ export const Editor: React.FC<EditorProps> = ({
 
   useEffect(() => {
       const isNewCard = !initialCard || !initialCard.id || initialCard.id.startsWith('new-');
-      const isPhantom = !!initialCard?.title; // タイトルがある場合はリンク作成(Phantom)とみなす
+      const isPhantom = !!initialCard?.title;
 
       if (isNewCard && !isPhantom && titleInputRef.current) {
           setTimeout(() => {
@@ -111,7 +168,6 @@ export const Editor: React.FC<EditorProps> = ({
       }
   }, [initialCard]);
 
-  // Adjust title height on change
   useEffect(() => {
       if (titleInputRef.current) {
           titleInputRef.current.style.height = 'auto';
@@ -126,7 +182,7 @@ export const Editor: React.FC<EditorProps> = ({
           
           const isNewCard = initialCard?.id?.startsWith('new-');
           const isPhantom = (isNewCard || !initialCard?.id) && !!initialCard?.title;
-          const isExplicitEdit = !!initialCard?.id && !isNewCard; // 既存カードの編集
+          const isExplicitEdit = !!initialCard?.id && !isNewCard;
           const isTabFocus = document.activeElement === readViewRef.current;
           if (isPhantom || isExplicitEdit || isTabFocus) {
               bodyRef.current.focus();
@@ -164,7 +220,7 @@ export const Editor: React.FC<EditorProps> = ({
 
       saveTimeoutRef.current = setTimeout(() => {
           handleAutoSave();
-      }, 800); 
+      }, 800);
 
       return () => {
           if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -172,7 +228,7 @@ export const Editor: React.FC<EditorProps> = ({
   }, [title, body, type, dueDate, stacks, createdAt, completed, isPinned]);
 
   const handleAutoSave = () => {
-    if (!title.trim() && !body.trim()) return; 
+    if (!title.trim() && !body.trim()) return;
     let dueTimestamp: number | undefined = undefined;
     if (type === CardType.GTD && dueDate) {
       dueTimestamp = new Date(dueDate).getTime();
@@ -189,7 +245,7 @@ export const Editor: React.FC<EditorProps> = ({
       createdAt: createdTimestamp,
       completed: type === CardType.GTD ? completed : false,
       isPinned
-    }, false); 
+    }, false);
   };
 
   const handleTogglePin = () => {
@@ -202,7 +258,7 @@ export const Editor: React.FC<EditorProps> = ({
           bodyRef.current.style.height = 'auto';
           bodyRef.current.style.height = `${bodyRef.current.scrollHeight}px`;
           const isPhantom = !initialCard?.id && !!initialCard?.title;
-          const isExplicitEdit = !!initialCard?.id; 
+          const isExplicitEdit = !!initialCard?.id;
           const isTabFocus = document.activeElement === readViewRef.current;
           if (isPhantom || isExplicitEdit || isTabFocus) {
               bodyRef.current.focus();
@@ -218,7 +274,7 @@ export const Editor: React.FC<EditorProps> = ({
               savedScrollTop.current = null;
           }
       }
-  }, [isEditingBody]); 
+  }, [isEditingBody]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -228,13 +284,12 @@ export const Editor: React.FC<EditorProps> = ({
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         
-        // タイトルも本文も空の場合は保存せずに閉じるだけ
         if (!title.trim() && !body.trim()) {
             onCancel();
             return;
         }
         
-        handleAutoSave(); // Trigger save with current state
+        handleAutoSave();
         onSave({
             id: initialCard?.id,
             title,
@@ -245,7 +300,7 @@ export const Editor: React.FC<EditorProps> = ({
             createdAt: new Date(createdAt).getTime(),
             completed: type === CardType.GTD ? completed : false,
             isPinned
-        }, true); // true = close editor
+        }, true);
         return;
       }
       if (e.altKey && e.key.toLowerCase() === 't') {
@@ -259,16 +314,16 @@ export const Editor: React.FC<EditorProps> = ({
         }
       }
       if (showWikiSuggestions) {
-          if (e.key === 'ArrowDown') { e.preventDefault(); setWikiSuggestionIndex(prev => (prev + 1) % wikiSuggestions.length); } 
-          else if (e.key === 'ArrowUp') { e.preventDefault(); setWikiSuggestionIndex(prev => (prev - 1 + wikiSuggestions.length) % wikiSuggestions.length); } 
-          else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectWikiSuggestion(wikiSuggestions[wikiSuggestionIndex]); } 
+          if (e.key === 'ArrowDown') { e.preventDefault(); setWikiSuggestionIndex(prev => (prev + 1) % wikiSuggestions.length); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setWikiSuggestionIndex(prev => (prev - 1 + wikiSuggestions.length) % wikiSuggestions.length); }
+          else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectWikiSuggestion(wikiSuggestions[wikiSuggestionIndex]); }
           else if (e.key === 'Escape') { setShowWikiSuggestions(false); e.stopPropagation(); }
           return;
       }
       if (showStackSuggestions) {
-          if (e.key === 'ArrowDown') { e.preventDefault(); setStackSuggestionIndex(prev => (prev + 1) % stackSuggestions.length); } 
-          else if (e.key === 'ArrowUp') { e.preventDefault(); setStackSuggestionIndex(prev => (prev - 1 + stackSuggestions.length) % stackSuggestions.length); } 
-          else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectStackSuggestion(stackSuggestions[stackSuggestionIndex]); } 
+          if (e.key === 'ArrowDown') { e.preventDefault(); setStackSuggestionIndex(prev => (prev + 1) % stackSuggestions.length); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setStackSuggestionIndex(prev => (prev - 1 + stackSuggestions.length) % stackSuggestions.length); }
+          else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectStackSuggestion(stackSuggestions[stackSuggestionIndex]); }
           else if (e.key === 'Escape') { setShowStackSuggestions(false); e.stopPropagation(); }
           return;
       }
@@ -280,7 +335,7 @@ export const Editor: React.FC<EditorProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [body, onCancel, showWikiSuggestions, showStackSuggestions, wikiSuggestions, wikiSuggestionIndex, stackSuggestions, stackSuggestionIndex, isEditingBody, showDeleteConfirm]);
+  }, [body, onCancel, showWikiSuggestions, showStackSuggestions, wikiSuggestions, wikiSuggestionIndex, stackSuggestions, stackSuggestionIndex, isEditingBody, showDeleteConfirm, title, type, dueDate, stacks, createdAt, completed, isPinned, initialCard?.id, onSave]);
 
   const insertTimestamp = () => {
     if (!bodyRef.current) return;
@@ -362,7 +417,7 @@ export const Editor: React.FC<EditorProps> = ({
   const handleStackChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = e.target.value;
       setStacks(val);
-      const parts = val.split(/,|、/); 
+      const parts = val.split(/,|、/);
       const currentInput = parts[parts.length - 1].trim();
       if (currentInput.length > 0) {
           const matches = availableStacks.filter(s => s.toLowerCase().includes(currentInput.toLowerCase()) && !parts.slice(0, -1).map(p => p.trim()).includes(s)).slice(0, 5);
@@ -380,7 +435,7 @@ export const Editor: React.FC<EditorProps> = ({
 
   const selectStackSuggestion = (suggestion: string) => {
       const parts = stacks.split(',');
-      parts.pop(); 
+      parts.pop();
       parts.push(' ' + suggestion);
       setStacks(parts.join(',') + ', ');
       setShowStackSuggestions(false);
@@ -388,10 +443,9 @@ export const Editor: React.FC<EditorProps> = ({
   };
 
   const handleViewModeClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // 文字選択中の場合は編集モードに切り替えない
     const selection = window.getSelection();
     if (selection && selection.toString().length > 0) {
-        return; // 選択中は何もしない
+        return;
     }
 
     let offset = body.length;
@@ -407,9 +461,9 @@ export const Editor: React.FC<EditorProps> = ({
     if (containerRef.current) {
         savedScrollTop.current = containerRef.current.scrollTop;
     }
-    setInitialCursorOffset(offset); 
+    setInitialCursorOffset(offset);
     setIsEditingBody(true);
-    isMouseDownRef.current = false; 
+    isMouseDownRef.current = false;
   };
 
   const handleDeleteClick = () => {
@@ -439,7 +493,7 @@ export const Editor: React.FC<EditorProps> = ({
   return (
     <div className={`bg-paper w-full max-w-full h-auto max-h-full flex flex-col shadow-none overflow-hidden relative border-t-[8px] ${TYPE_BORDER_COLOR[type]}`}>
       
-      {/* Delete Confirmation Overlay ... */}
+      {/* Delete Confirmation Overlay */}
       {showDeleteConfirm && (
           <div className="absolute inset-0 bg-stone-900/10 backdrop-blur-[1px] z-50 flex items-center justify-center p-4">
               <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200">
@@ -469,7 +523,7 @@ export const Editor: React.FC<EditorProps> = ({
              </button>
            )}
            {initialCard?.id && (
-             <button 
+             <button
                 onClick={handleDeleteClick}
                 className="text-stone-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-colors"
                 title="削除"
@@ -498,7 +552,7 @@ export const Editor: React.FC<EditorProps> = ({
                     key={t}
                     onClick={() => setType(t)}
                     className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2 ${
-                    type === t 
+                    type === t
                         ? TYPE_COLORS_BG[t] + ' shadow-sm transform scale-105'
                         : 'bg-stone-100 text-stone-400 hover:bg-stone-200'
                     }`}
@@ -511,7 +565,7 @@ export const Editor: React.FC<EditorProps> = ({
 
             <div className="flex items-center gap-2 text-stone-400 text-sm ml-auto sm:ml-0">
                 <Clock size={14} />
-                <input 
+                <input
                     type="datetime-local"
                     value={createdAt}
                     onChange={(e) => setCreatedAt(e.target.value)}
@@ -535,7 +589,7 @@ export const Editor: React.FC<EditorProps> = ({
                 autoFocus={!initialCard?.id && !initialCard?.title}
             />
             {type === CardType.GTD && (
-                <button 
+                <button
                     onClick={() => setCompleted(!completed)}
                     title={completed ? "完了を解除" : "完了にする"}
                     className={`shrink-0 transition-colors transform active:scale-95 ${completed ? 'text-green-600' : 'text-stone-300 hover:text-green-500'}`}
@@ -550,8 +604,8 @@ export const Editor: React.FC<EditorProps> = ({
             {type === CardType.GTD && (
                 <div className="flex items-center gap-2 text-stone-600 text-sm bg-stone-100/50 px-3 py-1.5 rounded border border-stone-200">
                     <span className="text-xs font-bold uppercase">Due:</span>
-                    <input 
-                        type="date" 
+                    <input
+                        type="date"
                         className="bg-transparent focus:outline-none"
                         value={dueDate}
                         onChange={(e) => setDueDate(e.target.value)}
@@ -559,10 +613,10 @@ export const Editor: React.FC<EditorProps> = ({
                 </div>
             )}
             <div className="flex-1 min-w-[200px] relative">
-                <input 
+                <input
                     ref={stackInputRef}
-                    type="text" 
-                    placeholder="タグ (カンマ区切り)" 
+                    type="text"
+                    placeholder="タグ (カンマ区切り)"
                     className="w-full bg-transparent border-b border-stone-200 px-0 py-1.5 text-sm focus:outline-none focus:border-stone-400 transition-all text-stone-600 placeholder-stone-300"
                     value={stacks}
                     onChange={handleStackChange}
@@ -572,7 +626,7 @@ export const Editor: React.FC<EditorProps> = ({
                 {showStackSuggestions && (
                     <div className="absolute top-full left-0 w-full bg-white border border-stone-200 shadow-lg rounded-md z-20 mt-1 max-h-40 overflow-y-auto">
                         {stackSuggestions.map((suggestion, idx) => (
-                            <div 
+                            <div
                                 key={suggestion}
                                 className={`px-3 py-2 text-sm cursor-pointer hover:bg-stone-100 ${idx === stackSuggestionIndex ? 'bg-stone-100 font-medium' : ''}`}
                                 onClick={() => selectStackSuggestion(suggestion)}
@@ -606,17 +660,17 @@ export const Editor: React.FC<EditorProps> = ({
                     />
                      {/* WikiLink Autocomplete Dropdown */}
                     {showWikiSuggestions && (
-                        <div 
+                        <div
                             className="absolute bg-white border border-stone-200 shadow-xl rounded-md z-30 max-h-60 overflow-y-auto min-w-[200px]"
                             style={{ top: wikiSuggestionPos.top, left: wikiSuggestionPos.left }}
                         >
                             {wikiSuggestions.map((suggestion, idx) => (
-                                <div 
+                                <div
                                     key={suggestion}
                                     className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${idx === wikiSuggestionIndex ? 'bg-blue-50 text-blue-800' : 'text-stone-700'}`}
                                     onClick={(e) => {
                                         e.preventDefault();
-                                        e.stopPropagation(); // Stop blur from textarea
+                                        e.stopPropagation();
                                         selectWikiSuggestion(suggestion);
                                     }}
                                     onMouseEnter={() => setWikiSuggestionIndex(idx)}
@@ -630,98 +684,67 @@ export const Editor: React.FC<EditorProps> = ({
                     )}
                 </>
             ) : (
-                <div 
+                <div
                     ref={readViewRef}
                     onClick={handleViewModeClick}
                     onMouseDown={() => { isMouseDownRef.current = true; }}
                     onMouseUp={() => { isMouseDownRef.current = false; }}
-                    onFocus={() => { 
+                    onFocus={() => {
                         if (!isMouseDownRef.current) setIsEditingBody(true);
-                    }} 
-                    tabIndex={0} 
+                    }}
+                    tabIndex={0}
                     className="w-full min-h-[150px] cursor-text outline-none"
                 >
-                    <CardRenderer 
-                        content={body || '内容なし'} 
-                        onLinkClick={onNavigate} 
+                    <CardRenderer
+                        content={body || '内容なし'}
+                        onLinkClick={onNavigate}
                         className={!body ? 'text-stone-300 italic' : ''}
                     />
                 </div>
             )}
         </div>
 
-    {/* 本文中のリンク表示 */}
-        {outgoingLinks.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-stone-200">
+        {/* Links Section（アコーディオンリスト形式） */}
+        {outgoingLinksWithRelated.length > 0 && (
+          <div className="mt-6 pt-4 border-t border-stone-200">
             <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-3 flex items-center gap-2">
-                <LinkIcon size={14} /> Links ({outgoingLinks.length})
+              <LinkIcon size={14} /> Links ({outgoingLinksWithRelated.length})
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {outgoingLinks.map(link => {
-                // リンク先のカードを検索
-                const linkedCard = allTitles.includes(link) 
-                    ? allCards.find(c => !c.isDeleted && c.title === link)
-                    : null;
-                
-                if (linkedCard) {
-                    // カードが存在する場合はLinkCardで表示
-                    const linkMatches = linkedCard.body.match(/\[\[([^\]]+)\]\]/g) || [];
-                    const linkedCardLinks = Array.from(new Set(
-                    linkMatches
-                        .map(match => match.slice(2, -2))
-                        .filter(title => title !== linkedCard.title && title !== initialCard?.title)
-                    ));
-                    
-                    return (
-                    <LinkCard
-                        key={link}
-                        card={linkedCard}
-                        links={linkedCardLinks}
-                        onClick={onNavigate}
-                    />
-                    );
-                } else {
-                    // カードが存在しない場合はプレースホルダー
-                    return (
-                    <div
-                        key={link}
-                        onClick={(e) => onNavigate(link, e)}
-                        className="border-l-4 border-l-stone-300 bg-stone-50/30 rounded-r-md p-3 cursor-pointer hover:bg-stone-100 transition-colors h-full flex flex-col"
-                    >
-                        <h4 className="font-bold text-sm text-stone-500 mb-2 line-clamp-1">
-                        {link}
-                        </h4>
-                        <p className="text-xs text-stone-400 italic flex-1">
-                        カードが存在しません（クリックで作成）
-                        </p>
-                    </div>
-                    );
-                }
-                })}
+            <div className="bg-white border border-stone-200 rounded-md overflow-hidden">
+              {outgoingLinksWithRelated.map(({ title: linkTitle, relatedLinks }) => (
+                <LinkItem
+                  key={linkTitle}
+                  title={linkTitle}
+                  relatedLinks={relatedLinks}
+                  onNavigate={onNavigate}
+                  currentCardTitle={initialCard?.title}
+                />
+              ))}
             </div>
-            </div>
+          </div>
         )}
 
-        {/* Backlinks Section */}
-        {backlinks.length > 0 && (
-            <div className="mt-8 pt-6 border-t border-stone-200">
+        {/* Backlinks Section（カード形式 + 関連アコーディオン） */}
+        {backlinksWithRelated.length > 0 && (
+          <div className="mt-8 pt-6 border-t border-stone-200">
             <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-3 flex items-center gap-2">
-                <LinkIcon size={14} /> Backlinks ({backlinks.length})
+              <LinkIcon size={14} /> Backlinks ({backlinksWithRelated.length})
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {backlinks.map(linkCard => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-3">
+              {backlinksWithRelated.map(({ card, relatedLinks }) => (
                 <LinkCard
-                    key={linkCard.id}
-                    card={linkCard}
-                    highlightTerm={initialCard?.title}
-                    links={linkCard.outgoingLinks || []}
-                    onClick={onNavigate}
+                  key={card.id}
+                  card={card}
+                  highlightTerm={initialCard?.title}
+                  relatedLinks={relatedLinks}
+                  onClick={onNavigate}
+                  currentCardTitle={initialCard?.title}
                 />
-                ))}
+              ))}
             </div>
-            </div>
+          </div>
         )}
-        </div>
+      </div>
     </div>
   );
 };

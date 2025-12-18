@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardType } from '../types';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 
 interface LinkCardProps {
   card: Card;
   highlightTerm?: string;
-  links?: string[];
+  relatedLinks?: string[]; // 関連するカードタイトルの配列
   onClick: (cardTitle: string, e?: React.MouseEvent) => void;
+  currentCardTitle?: string; // 現在開いているカードのタイトル（除外用）
 }
 
 const TYPE_COLORS = {
@@ -18,9 +20,12 @@ const TYPE_COLORS = {
 export const LinkCard: React.FC<LinkCardProps> = ({ 
   card, 
   highlightTerm,
-  links = [],
-  onClick 
+  relatedLinks = [],
+  onClick,
+  currentCardTitle
 }) => {
+  const [isRelatedExpanded, setIsRelatedExpanded] = useState(false);
+
   // カード本文から該当箇所を抽出（前後の文脈を含む）
   const getContextSnippet = () => {
     if (!highlightTerm) return card.body.slice(0, 120);
@@ -34,10 +39,21 @@ export const LinkCard: React.FC<LinkCardProps> = ({
 
   const snippet = getContextSnippet();
 
+  // 現在のカードとカード自身を除外
+  const filteredRelatedLinks = relatedLinks.filter(
+    link => link !== card.title && link !== currentCardTitle
+  );
+
   return (
     <div 
       className={`border-t-4 ${TYPE_COLORS[card.type]} p-3 cursor-pointer hover:bg-stone-50 transition-colors h-full flex flex-col`}
-      onClick={(e) => onClick(card.title, e)}
+      onClick={(e) => {
+        // 関連セクションのクリックは伝播させない
+        if ((e.target as HTMLElement).closest('.related-section')) {
+          return;
+        }
+        onClick(card.title, e);
+      }}
     >
       {/* タイトル */}
       <h4 className="font-bold text-sm text-stone-800 mb-2 line-clamp-1">
@@ -49,23 +65,39 @@ export const LinkCard: React.FC<LinkCardProps> = ({
         {snippet}
       </p>
 
-      {/* 2-hop links */}
-      {links.length > 0 && (
-        <div className="flex items-center gap-1 flex-wrap pt-2 border-t border-stone-200/50">
-          {links.slice(0, 4).map((link, idx) => (
-            <span 
-              key={idx}
-              className="text-[10px] bg-stone-200/50 px-1.5 py-0.5 rounded text-stone-600 hover:bg-stone-300/50 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClick(link, e);
-              }}
-            >
-              {link}
-            </span>
-          ))}
-          {links.length > 4 && (
-            <span className="text-[10px] text-stone-400">+{links.length - 4}</span>
+      {/* 関連リンクセクション（折りたたみ可） */}
+      {filteredRelatedLinks.length > 0 && (
+        <div className="related-section pt-2 border-t border-stone-200/50 mt-auto">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsRelatedExpanded(!isRelatedExpanded);
+            }}
+            className="flex items-center gap-1 text-xs text-stone-400 hover:text-stone-600 transition-colors w-full"
+          >
+            {isRelatedExpanded ? (
+              <ChevronDown size={12} />
+            ) : (
+              <ChevronRight size={12} />
+            )}
+            <span>関連 ({filteredRelatedLinks.length}件)</span>
+          </button>
+
+          {isRelatedExpanded && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {filteredRelatedLinks.map((link, idx) => (
+                <button
+                  key={idx}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClick(link, e);
+                  }}
+                  className="text-[10px] bg-stone-200/50 hover:bg-stone-300/50 px-1.5 py-0.5 rounded text-stone-600 hover:text-stone-800 transition-colors"
+                >
+                  {link}
+                </button>
+              ))}
+            </div>
           )}
         </div>
       )}
