@@ -936,7 +936,37 @@ return (
       {showBatchTagModal && (<div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]"><div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200"><h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2"><Tag size={20} />タグの管理</h3><div className="mb-4"><label className="text-xs font-bold text-stone-400 uppercase block mb-1">タグを追加</label><div className="flex gap-2"><input type="text" className="flex-1 border border-stone-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" placeholder="タグ名を入力" value={batchTagInput} onChange={(e) => setBatchTagInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleBatchAddTag()} /><button onClick={handleBatchAddTag} className="bg-stone-800 text-white px-3 py-1.5 rounded text-sm hover:bg-stone-900 transition-colors">追加</button></div></div><div className="mb-6"><label className="text-xs font-bold text-stone-400 uppercase block mb-2">現在のタグ (クリックして削除)</label><div className="flex flex-wrap gap-2">{commonStacks.map(stack => (<button key={stack} onClick={() => handleBatchRemoveTag(stack)} className="bg-stone-100 text-stone-600 px-2 py-1 rounded text-sm hover:bg-red-100 hover:text-red-600 hover:line-through transition-colors">#{stack}</button>))} {commonStacks.length === 0 && <span className="text-sm text-stone-400 italic">タグなし</span>}</div></div><div className="flex justify-end"><button onClick={() => setShowBatchTagModal(false)} className="px-4 py-2 rounded-md bg-stone-100 text-stone-600 hover:bg-stone-200 font-medium transition-colors">閉じる</button></div></div></div>)}
       {showBatchDeleteConfirm && (<div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]"><div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200"><div className="flex flex-col items-center text-center gap-3 mb-6"><div className="bg-red-100 p-3 rounded-full text-red-600"><AlertTriangle size={32} /></div><h3 className="text-lg font-bold text-stone-800">カードを削除しますか？</h3><p className="text-sm text-stone-500">{selectedCardIds.size}枚のカードを削除します。この操作は元に戻せません。</p></div><div className="flex gap-3"><button onClick={() => setShowBatchDeleteConfirm(false)} className="flex-1 px-4 py-2 rounded-md bg-stone-100 text-stone-600 hover:bg-stone-200 font-medium transition-colors">キャンセル</button><button onClick={confirmBatchDelete} className="flex-1 px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 font-bold transition-colors shadow-sm">削除する</button></div></div></div>)}
 
-      <aside className={`fixed top-0 bottom-0 left-0 w-60 bg-paper-dark border-r border-stone-300 flex flex-col z-50 shadow-2xl md:shadow-none ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 ${isDesktopSidebarOpen ? 'md:w-60' : 'md:w-0 md:border-r-0 md:overflow-hidden'}`}>
+      {/* モーダルオーバーレイ - サイドバー+メイン画面（右側カード除く）全体をカバー (z-index 50) */}
+      {activeModalCard && (
+          <div 
+              className="fixed top-0 bottom-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-stone-900/20 backdrop-blur-[1px] animate-in fade-in duration-200"
+              onClick={(e) => { if (e.target === e.currentTarget) handleCloseModal(); }}
+              style={{
+                  left: isDesktopSidebarOpen ? '240px' : '0',
+                  right: activeSideCard ? '500px' : '0'
+              }}
+          >
+              <div className="w-full max-w-2xl h-auto max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl bg-paper pointer-events-auto">
+                  <Editor 
+                      initialCard={activeModalCard}
+                      allTitles={allTitles}
+                      availableStacks={allStacks.map(s => s.name)}
+                      dateFormat={dateFormat}
+                      onSave={(data, close) => {
+                          handleSaveCard(data);
+                          if (close) handleCloseModal();
+                      }}
+                      onCancel={handleCloseModal}
+                      onDelete={() => handleDeleteCard(activeModalCard.id)}
+                      onNavigate={(term, e) => handleLinkClick(term, e)} 
+                      backlinks={modalBacklinks} 
+                      onMoveToSide={() => handleMoveToSide(activeModalCard.id)}
+                  />
+              </div>
+          </div>
+      )}
+
+      <aside className={`fixed top-0 bottom-0 left-0 w-60 bg-paper-dark border-r border-stone-300 flex flex-col z-50 shadow-2xl md:shadow-none ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 ${isDesktopSidebarOpen ? 'md:w-60' : 'md:w-0 md:border-r-0 md:overflow-hidden'} ${activeModalCard ? 'blur-sm pointer-events-none select-none' : ''}`}>
         <div className="w-60 flex flex-col h-full">
             <div className="p-6 border-b border-stone-200/50 flex justify-between items-center"><div><h1 className="font-serif font-bold text-2xl tracking-tighter text-stone-800">d-PoIC</h1><p className="text-xs text-stone-400 mt-1 uppercase tracking-widest">Pile of Index Cards</p></div><button className="md:hidden text-stone-500" onClick={() => setIsSidebarOpen(false)}><X size={20} /></button></div>
             <nav className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -950,35 +980,6 @@ return (
       </aside>
 
       <div className="flex-1 flex overflow-hidden relative">
-        {/* モーダルオーバーレイ - サイドバー+メイン画面（右側カード除く）全体をカバー (z-index 50) */}
-        {activeModalCard && (
-            <div 
-                className="absolute top-0 bottom-0 left-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-stone-900/20 backdrop-blur-[1px] animate-in fade-in duration-200"
-                onClick={(e) => { if (e.target === e.currentTarget) handleCloseModal(); }}
-                style={{
-                    right: activeSideCard ? '500px' : '0'
-                }}
-            >
-                <div className="w-full max-w-2xl h-auto max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl bg-paper pointer-events-auto">
-                    <Editor 
-                        initialCard={activeModalCard}
-                        allTitles={allTitles}
-                        availableStacks={allStacks.map(s => s.name)}
-                        dateFormat={dateFormat}
-                        onSave={(data, close) => {
-                            handleSaveCard(data);
-                            if (close) handleCloseModal();
-                        }}
-                        onCancel={handleCloseModal}
-                        onDelete={() => handleDeleteCard(activeModalCard.id)}
-                        onNavigate={(term, e) => handleLinkClick(term, e)} 
-                        backlinks={modalBacklinks} 
-                        onMoveToSide={() => handleMoveToSide(activeModalCard.id)}
-                    />
-                </div>
-            </div>
-          )}
-
           {/* 左側のメイン領域 */}
           <div className={`flex flex-col overflow-hidden transition-all duration-200 ${activeSideCard ? 'flex-1' : 'w-full'} relative`}>
               {/* ヘッダー - 左側領域専用 - z-indexを10に設定 */}
