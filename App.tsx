@@ -950,6 +950,35 @@ return (
       </aside>
 
       <div className="flex-1 flex overflow-hidden relative">
+        {/* モーダルオーバーレイ - サイドバー+メイン画面（右側カード除く）全体をカバー (z-index 50) */}
+        {activeModalCard && (
+            <div 
+                className="absolute top-0 bottom-0 left-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-stone-900/20 backdrop-blur-[1px] animate-in fade-in duration-200"
+                onClick={(e) => { if (e.target === e.currentTarget) handleCloseModal(); }}
+                style={{
+                    right: activeSideCard ? '500px' : '0'
+                }}
+            >
+                <div className="w-full max-w-2xl h-auto max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl bg-paper pointer-events-auto">
+                    <Editor 
+                        initialCard={activeModalCard}
+                        allTitles={allTitles}
+                        availableStacks={allStacks.map(s => s.name)}
+                        dateFormat={dateFormat}
+                        onSave={(data, close) => {
+                            handleSaveCard(data);
+                            if (close) handleCloseModal();
+                        }}
+                        onCancel={handleCloseModal}
+                        onDelete={() => handleDeleteCard(activeModalCard.id)}
+                        onNavigate={(term, e) => handleLinkClick(term, e)} 
+                        backlinks={modalBacklinks} 
+                        onMoveToSide={() => handleMoveToSide(activeModalCard.id)}
+                    />
+                </div>
+            </div>
+          )}
+
           {/* 左側のメイン領域 */}
           <div className={`flex flex-col overflow-hidden transition-all duration-200 ${activeSideCard ? 'flex-1' : 'w-full'} relative`}>
               {/* ヘッダー - 左側領域専用 - z-indexを10に設定 */}
@@ -1095,35 +1124,6 @@ return (
                   {!isSelectionMode && (<button onClick={openNewCardEditor} className="fixed bottom-6 right-6 z-40 bg-stone-800 hover:bg-stone-900 text-white p-4 rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center"><Plus size={24} /></button>)}
               </div>
           </div>
-
-          {/* モーダルオーバーレイ - サイドバー+メイン画面（右側カード除く） (z-index 50) */}
-          {activeModalCard && (
-              <div 
-                  className="absolute top-0 bottom-0 left-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-stone-900/20 backdrop-blur-[1px] animate-in fade-in duration-200"
-                  onClick={(e) => { if (e.target === e.currentTarget) handleCloseModal(); }}
-                  style={{
-                      right: activeSideCard ? '500px' : '0'
-                  }}
-              >
-                  <div className="w-full max-w-2xl h-auto max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl bg-paper pointer-events-auto">
-                      <Editor 
-                          initialCard={activeModalCard}
-                          allTitles={allTitles}
-                          availableStacks={allStacks.map(s => s.name)}
-                          dateFormat={dateFormat}
-                          onSave={(data, close) => {
-                              handleSaveCard(data);
-                              if (close) handleCloseModal();
-                          }}
-                          onCancel={handleCloseModal}
-                          onDelete={() => handleDeleteCard(activeModalCard.id)}
-                          onNavigate={(term, e) => handleLinkClick(term, e)} 
-                          backlinks={modalBacklinks} 
-                          onMoveToSide={() => handleMoveToSide(activeModalCard.id)}
-                      />
-                  </div>
-              </div>
-          )}
 
           {/* 右側のカードエディタ - 画面全体の高さ (z-index 40) */}
           {activeSideCard && (
