@@ -575,12 +575,12 @@ export const Editor: React.FC<EditorProps> = ({
         </div>
 
         {/* Body Editor with Click-to-Edit */}
-        <div className="relative min-h-[150px]">
+        <div className="relative min-h-[100px]">
             {isEditingBody ? (
                 <>
                     <textarea
                         ref={bodyRef}
-                        className="block w-full min-h-[150px] resize-none border-none focus:outline-none bg-transparent text-[17px] font-sans leading-relaxed text-ink/90 placeholder-stone-300 overflow-hidden"
+                        className="block w-full min-h-[100px] resize-none border-none focus:outline-none bg-transparent text-[17px] font-sans leading-relaxed text-ink/90 placeholder-stone-300 overflow-hidden"
                         placeholder="内容を入力... (Alt+T: タイムスタンプ, [[ : リンク)"
                         value={body}
                         onChange={handleBodyChange}
@@ -627,7 +627,7 @@ export const Editor: React.FC<EditorProps> = ({
                         if (!isMouseDownRef.current) setIsEditingBody(true);
                     }} 
                     tabIndex={0} 
-                    className="w-full min-h-[150px] cursor-text outline-none"
+                    className="w-full min-h-[100px] cursor-text outline-none"
                 >
                     <CardRenderer 
                         content={body || '内容なし'} 
@@ -640,7 +640,7 @@ export const Editor: React.FC<EditorProps> = ({
 
         {/* Backlinks Section */}
         {backlinks.length > 0 && (
-            <div className="mt-8 pt-6 border-t border-stone-200">
+            <div className="mt-2 pt-6 border-t border-stone-200">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-3 flex items-center gap-2">
                     <LinkIcon size={14} /> Backlinks
                 </h3>
