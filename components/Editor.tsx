@@ -509,20 +509,19 @@ export const Editor: React.FC<EditorProps> = ({
         </div>
 
         {/* Title & Complete Toggle */}
-<div className="flex items-start gap-4 mb-4 min-w-0">
-    <textarea
-        ref={titleInputRef}
-        placeholder="タイトルなし"
-        className={`flex-1 min-w-0 max-w-full text-xl sm:text-2xl font-bold font-sans text-ink placeholder-stone-300 border-none focus:outline-none bg-transparent p-0 resize-none overflow-hidden ${completed ? 'text-stone-400' : ''}`}
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => {
-            if (e.key === 'Enter') e.preventDefault();
-        }}
-        rows={1}
-        autoFocus={!initialCard?.id && !initialCard?.title}
-    />
-
+        <div className="flex items-start gap-4 mb-4 min-w-0">
+            <textarea
+                ref={titleInputRef}
+                placeholder="タイトルなし"
+                className={`flex-1 min-w-0 max-w-full text-xl sm:text-2xl font-bold font-sans text-ink placeholder-stone-300 border-none focus:outline-none bg-transparent p-0 resize-none overflow-hidden ${completed ? 'text-stone-400' : ''}`}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.preventDefault();
+                }}
+                rows={1}
+                autoFocus={!initialCard?.id && !initialCard?.title}
+            />
             {type === CardType.GTD && (
                 <button 
                     onClick={() => setCompleted(!completed)}
