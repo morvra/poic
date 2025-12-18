@@ -476,7 +476,7 @@ export default function App() {
     }; 
     window.addEventListener('keydown', handleKeyDown); 
     return () => window.removeEventListener('keydown', handleKeyDown); 
-  }, [activeModalCardId, activeSideCardId, isDropboxConnected]);
+  }, [activeModalCardId, activeSideCardId, isDropboxConnected, viewMode, searchQuery, activeStack, activeType]);
 
   const handleDateFormatChange = (format: string) => {
     setDateFormat(format);
@@ -927,20 +927,6 @@ export default function App() {
       setActiveType(null);
     }
   };
-  
-  const prevViewModeRef = useRef<ViewMode>(viewMode);
-  
-  useEffect(() => {
-    // viewModeが'All'に変更された時、最上部にスクロール
-    if (prevViewModeRef.current !== 'All' && viewMode === 'All' && !searchQuery && !activeStack && !activeType) {
-      setTimeout(() => {
-        if (mainScrollRef.current) {
-          mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      }, 50);
-    }
-    prevViewModeRef.current = viewMode;
-  }, [viewMode, searchQuery, activeStack, activeType]);
 
   const handleExportOPML = () => { 
       let exportCards = filteredCards; if (isSelectionMode && selectedCardIds.size > 0) { exportCards = cards.filter(c => !c.isDeleted && selectedCardIds.has(c.id)); }
