@@ -18,6 +18,7 @@ export interface Card {
   isDeleted?: boolean;
   deletedAt?: number;
   isPinned?: number | boolean; // Timestamp of when it was pinned
+  outgoingLinks?: string[];
 }
 
 export type ViewMode = 'All' | 'GTD' | 'Stack' | 'Type';

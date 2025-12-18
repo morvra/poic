@@ -2,11 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardType } from '../types';
 import { formatTimeShort, formatTimestampByPattern } from '../utils';
 import { CardRenderer } from './CardRenderer';
+import { LinkCard } from './LinkCard';
 import { Calendar, Save, X, Trash2, Clock, CheckCircle, Circle, Link as LinkIcon, AlertTriangle, FileText, Lightbulb, CheckSquare, BookOpen, Pin, ArrowRightFromLine } from 'lucide-react';
 
 interface EditorProps {
   initialCard?: Card;
   allTitles: string[];
+  allCards: Card[];
   availableStacks: string[];
   dateFormat: string;
   onSave: (card: Partial<Card>, shouldClose?: boolean) => void;
@@ -30,6 +32,7 @@ const TypeIcon = ({ type, className }: { type: CardType, className?: string }) =
 export const Editor: React.FC<EditorProps> = ({ 
   initialCard, 
   allTitles, 
+  allCards, 
   availableStacks, 
   dateFormat, 
   onSave, 
@@ -80,6 +83,15 @@ export const Editor: React.FC<EditorProps> = ({
   const [stackSuggestions, setStackSuggestions] = useState<string[]>([]);
   const [showStackSuggestions, setShowStackSuggestions] = useState(false);
   const [stackSuggestionIndex, setStackSuggestionIndex] = useState(0);
+
+  // 本文中のリンクを抽出
+  const outgoingLinks = useMemo(() => {
+    const linkMatches = body.match(/\[\[([^\]]+)\]\]/g) || [];
+    return Array.from(new Set(
+      linkMatches.map(match => match.slice(2, -2))
+    ));
+  }, [body]);
+
   
   // ... (Effects unchanged) ...
   useEffect(() => {
@@ -638,28 +650,78 @@ export const Editor: React.FC<EditorProps> = ({
             )}
         </div>
 
-        {/* Backlinks Section */}
-        {backlinks.length > 0 && (
-            <div className="mt-2 pt-6 border-t border-stone-200">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-3 flex items-center gap-2">
-                    <LinkIcon size={14} /> Backlinks
-                </h3>
-                <div className="grid grid-cols-1 gap-2">
-                    {backlinks.map(linkCard => (
-                        <div 
-                            key={linkCard.id}
-                            onClick={() => onNavigate(linkCard.title)}
-                            className="bg-stone-50 border border-stone-200 rounded p-3 cursor-pointer hover:bg-stone-100 transition-colors"
-                        >
-                            <div className="text-sm font-bold text-stone-700">{linkCard.title}</div>
-                            <div className="text-xs text-stone-400 mt-1 line-clamp-1">{linkCard.body.replace(/\n/g, ' ')}</div>
-                        </div>
-                    ))}
-                </div>
+    {/* 本文中のリンク表示 */}
+        {outgoingLinks.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-stone-200">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-3 flex items-center gap-2">
+                <LinkIcon size={14} /> Links ({outgoingLinks.length})
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {outgoingLinks.map(link => {
+                // リンク先のカードを検索
+                const linkedCard = allTitles.includes(link) 
+                    ? allCards.find(c => !c.isDeleted && c.title === link)
+                    : null;
+                
+                if (linkedCard) {
+                    // カードが存在する場合はLinkCardで表示
+                    const linkMatches = linkedCard.body.match(/\[\[([^\]]+)\]\]/g) || [];
+                    const linkedCardLinks = Array.from(new Set(
+                    linkMatches
+                        .map(match => match.slice(2, -2))
+                        .filter(title => title !== linkedCard.title && title !== initialCard?.title)
+                    ));
+                    
+                    return (
+                    <LinkCard
+                        key={link}
+                        card={linkedCard}
+                        links={linkedCardLinks}
+                        onClick={onNavigate}
+                    />
+                    );
+                } else {
+                    // カードが存在しない場合はプレースホルダー
+                    return (
+                    <div
+                        key={link}
+                        onClick={(e) => onNavigate(link, e)}
+                        className="border-l-4 border-l-stone-300 bg-stone-50/30 rounded-r-md p-3 cursor-pointer hover:bg-stone-100 transition-colors h-full flex flex-col"
+                    >
+                        <h4 className="font-bold text-sm text-stone-500 mb-2 line-clamp-1">
+                        {link}
+                        </h4>
+                        <p className="text-xs text-stone-400 italic flex-1">
+                        カードが存在しません（クリックで作成）
+                        </p>
+                    </div>
+                    );
+                }
+                })}
+            </div>
             </div>
         )}
 
-      </div>
+        {/* Backlinks Section */}
+        {backlinks.length > 0 && (
+            <div className="mt-8 pt-6 border-t border-stone-200">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-3 flex items-center gap-2">
+                <LinkIcon size={14} /> Backlinks ({backlinks.length})
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {backlinks.map(linkCard => (
+                <LinkCard
+                    key={linkCard.id}
+                    card={linkCard}
+                    highlightTerm={initialCard?.title}
+                    links={linkCard.outgoingLinks || []}
+                    onClick={onNavigate}
+                />
+                ))}
+            </div>
+            </div>
+        )}
+        </div>
     </div>
   );
 };

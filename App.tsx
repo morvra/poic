@@ -111,20 +111,51 @@ export default function App() {
 
   const activeFocusCard = activeModalCard || activeSideCard;
   
-  // Backlinks for Modal
+  // Backlinks for Modal（2-hop links付き）
   const modalBacklinks = useMemo(() => {
       if (!activeModalCard || !activeModalCard.title) return [];
       const escapedTitle = activeModalCard.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(`\\[\\[${escapedTitle}\\]\\]`, 'i');
-      return cards.filter(c => !c.isDeleted && c.id !== activeModalCard.id && regex.test(c.body));
+      
+      const backlinkedCards = cards.filter(c => 
+        !c.isDeleted && c.id !== activeModalCard.id && regex.test(c.body)
+      );
+      
+      // 各バックリンクカードから出ているリンクを抽出
+      return backlinkedCards.map(card => {
+        const linkMatches = card.body.match(/\[\[([^\]]+)\]\]/g) || [];
+        const linkedTitles = linkMatches
+          .map(match => match.slice(2, -2))
+          .filter(title => title !== activeModalCard.title && title !== card.title);
+        
+        return {
+          ...card,
+          outgoingLinks: Array.from(new Set(linkedTitles)) // 重複除去
+        };
+      });
   }, [activeModalCard, cards]);
 
-  // Backlinks for Side Panel
+  // Backlinks for Side Panel（2-hop links付き）
   const sideBacklinks = useMemo(() => {
       if (!activeSideCard || !activeSideCard.title) return [];
       const escapedTitle = activeSideCard.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(`\\[\\[${escapedTitle}\\]\\]`, 'i');
-      return cards.filter(c => !c.isDeleted && c.id !== activeSideCard.id && regex.test(c.body));
+      
+      const backlinkedCards = cards.filter(c => 
+        !c.isDeleted && c.id !== activeSideCard.id && regex.test(c.body)
+      );
+      
+      return backlinkedCards.map(card => {
+        const linkMatches = card.body.match(/\[\[([^\]]+)\]\]/g) || [];
+        const linkedTitles = linkMatches
+          .map(match => match.slice(2, -2))
+          .filter(title => title !== activeSideCard.title && title !== card.title);
+        
+        return {
+          ...card,
+          outgoingLinks: Array.from(new Set(linkedTitles))
+        };
+      });
   }, [activeSideCard, cards]);
 
   const allStacks = useMemo(() => {
@@ -949,6 +980,7 @@ return (
                   <Editor 
                       initialCard={activeModalCard}
                       allTitles={allTitles}
+                      allCards={cards}
                       availableStacks={allStacks.map(s => s.name)}
                       dateFormat={dateFormat}
                       onSave={(data, close) => {
@@ -1132,6 +1164,7 @@ return (
                     <Editor 
                         initialCard={activeSideCard}
                         allTitles={allTitles}
+                        allCards={cards}
                         availableStacks={allStacks.map(s => s.name)}
                         dateFormat={dateFormat}
                         onSave={(data, close) => {
