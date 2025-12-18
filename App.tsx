@@ -910,7 +910,7 @@ export default function App() {
   };
 
   const handleRandomCard = () => { if (filteredCards.length === 0) return; const randomIndex = Math.floor(Math.random() * filteredCards.length); const card = filteredCards[randomIndex]; const el = document.getElementById(`card-${card.id}`); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.style.transition = 'transform 0.2s, box-shadow 0.2s'; el.style.transform = 'scale(1.02)'; el.style.boxShadow = '0 0 0 4px rgba(6, 182, 212, 0.5)'; setTimeout(() => { el.style.transform = ''; el.style.boxShadow = ''; }, 1000); } };
-
+  
   const handleHome = () => { 
     const isAlreadyHome = viewMode === 'All' && !searchQuery && !activeStack && !activeType;
     
@@ -925,6 +925,13 @@ export default function App() {
       setViewMode('All'); 
       setActiveStack(null); 
       setActiveType(null);
+      
+      // 戻った後に最上部にスクロール
+      setTimeout(() => {
+        if (mainScrollRef.current) {
+          mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 50);
     }
   };
 
