@@ -997,7 +997,7 @@ return (
           </div>
       )}
 
-      <aside className={`fixed top-0 bottom-0 left-0 w-60 bg-paper-dark border-r border-stone-300 flex flex-col z-30 shadow-2xl md:shadow-none ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 ${isDesktopSidebarOpen ? 'md:w-60' : 'md:w-0 md:border-r-0 md:overflow-hidden'} ${activeModalCard ? 'blur-sm pointer-events-none select-none' : ''}`}>
+      <aside className={`fixed top-0 bottom-0 left-0 w-60 bg-paper-dark border-r border-stone-300 flex flex-col z-40 shadow-2xl md:shadow-none ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 ${isDesktopSidebarOpen ? 'md:w-60' : 'md:w-0 md:border-r-0 md:overflow-hidden'} ${activeModalCard ? 'blur-sm pointer-events-none select-none' : ''}`}>
         <div className="w-60 flex flex-col h-full">
             <div className="p-6 border-b border-stone-200/50 flex justify-between items-center"><div><h1 className="font-serif font-bold text-2xl tracking-tighter text-stone-800">d-PoIC</h1><p className="text-xs text-stone-400 mt-1 uppercase tracking-widest">Pile of Index Cards</p></div><button className="md:hidden text-stone-500" onClick={() => setIsSidebarOpen(false)}><X size={20} /></button></div>
             <nav className="flex-1 overflow-y-auto p-4 space-y-6">

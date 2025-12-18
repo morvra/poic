@@ -706,7 +706,7 @@ export const Editor: React.FC<EditorProps> = ({
 
         {/* Links Section（アコーディオンリスト形式） */}
         {outgoingLinksWithRelated.length > 0 && (
-          <div className="mt-6 pt-4 border-t border-stone-200">
+          <div className="mt-4 pt-4 border-t border-stone-200">
             <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-3 flex items-center gap-2">
               <LinkIcon size={14} /> Links ({outgoingLinksWithRelated.length})
             </h3>
@@ -726,7 +726,7 @@ export const Editor: React.FC<EditorProps> = ({
 
         {/* Backlinks Section（カード形式 + 関連アコーディオン） */}
         {backlinksWithRelated.length > 0 && (
-          <div className="mt-8 pt-6 border-t border-stone-200">
+          <div className="mt-4 pt-6 border-t border-stone-200">
             <h3 className="text-xs font-bold uppercase tracking-wider text-stone-400 mb-3 flex items-center gap-2">
               <LinkIcon size={14} /> Backlinks ({backlinksWithRelated.length})
             </h3>
