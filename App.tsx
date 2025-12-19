@@ -827,14 +827,14 @@ export default function App() {
           }
       }
 
-      let actualSavedId = currentId; // 実際に保存されたID
+      let actualSavedId = currentId;
 
       if (phantomCards.has(currentId)) {
           const existingIndex = cards.findIndex(c => c.id === currentId);
 
           if (existingIndex === -1) {
               const newId = generateId();
-              actualSavedId = newId; // 新しいIDを記録
+              actualSavedId = newId;
               const newCard: Card = {
                   id: newId,
                   type: cardData.type || CardType.Record,
@@ -857,6 +857,25 @@ export default function App() {
           }
       } else {
           const oldCard = cards.find(c => c.id === currentId);
+          
+          // 実際に変更があったかチェック
+          if (oldCard) {
+              const hasChanges = 
+                  oldCard.title !== cardData.title ||
+                  oldCard.body !== cardData.body ||
+                  oldCard.type !== cardData.type ||
+                  oldCard.dueDate !== cardData.dueDate ||
+                  oldCard.completed !== cardData.completed ||
+                  oldCard.isPinned !== cardData.isPinned ||
+                  JSON.stringify(oldCard.stacks) !== JSON.stringify(cardData.stacks);
+              
+              // 変更がない場合は更新しない
+              if (!hasChanges) {
+                  console.log('No changes detected, skipping update');
+                  return;
+              }
+          }
+          
           const titleChanged = oldCard && cardData.title && oldCard.title !== cardData.title;
 
           if (titleChanged && oldCard) {
@@ -885,11 +904,16 @@ export default function App() {
                   return c;
               }));
           } else {
-              setCards(cards.map(c => c.id === currentId ? { ...c, ...cardData, updatedAt: Date.now() } as Card : c));
+              // 変更がある場合のみ updatedAt を更新
+              setCards(cards.map(c => c.id === currentId ? { 
+                  ...c, 
+                  ...cardData, 
+                  updatedAt: Date.now() 
+              } as Card : c));
           }
       }
       
-      // 実際に保存されたIDをlocalChangesに追加
+      // 変更があった場合のみ localChanges に追加
       setSyncMetadata(prev => ({
         ...prev,
         localChanges: [...new Set([...prev.localChanges, actualSavedId])]

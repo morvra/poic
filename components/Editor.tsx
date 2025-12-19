@@ -240,6 +240,30 @@ export const Editor: React.FC<EditorProps> = ({
       return;
     }
     
+    // 実際に変更があるかチェック
+    if (initialCard) {
+        const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        const createdTimestamp = new Date(createdAt).getTime();
+        let dueTimestamp: number | undefined = undefined;
+        if (type === CardType.GTD && dueDate) {
+            dueTimestamp = new Date(dueDate).getTime();
+        }
+        
+        const hasChanges = 
+            initialCard.title !== title ||
+            initialCard.body !== body ||
+            initialCard.type !== type ||
+            initialCard.dueDate !== dueTimestamp ||
+            (type === CardType.GTD && initialCard.completed !== completed) ||
+            initialCard.isPinned !== isPinned ||
+            JSON.stringify(initialCard.stacks?.sort()) !== JSON.stringify(stackList.sort());
+        
+        if (!hasChanges) {
+            console.log('No changes detected in auto-save, skipping update');
+            return;
+        }
+    }
+    
     let dueTimestamp: number | undefined = undefined;
     if (type === CardType.GTD && dueDate) {
       dueTimestamp = new Date(dueDate).getTime();
