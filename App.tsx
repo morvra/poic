@@ -1188,7 +1188,7 @@ return (
               >
                   <div className="px-2 sm:px-6 w-full max-w-[1920px] mx-auto pb-20 pt-4">
                       <div className="mb-4 flex items-center justify-between pl-2 border-l-4 border-stone-400">
-                          <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">{viewMode === 'All' && (searchQuery ? `検索: "${searchQuery}"` : 'Dock (全カード)')}{viewMode === 'Stack' && `タグ: ${activeStack}`}{viewMode === 'Type' && `分類: ${activeType}`}{viewMode === 'GTD' && 'アクション'}</h2>
+                          <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">{viewMode === 'All' && (searchQuery ? `検索: "${searchQuery}"` : 'Dock')}{viewMode === 'Stack' && `タグ: ${activeStack}`}{viewMode === 'Type' && `分類: ${activeType}`}{viewMode === 'GTD' && 'アクション'}</h2>
                           <div className="flex items-center gap-2">
                               {/* 並び順ドロップダウン（GTDモード以外） */}
                               {viewMode !== 'GTD' && (
@@ -1217,7 +1217,7 @@ return (
                                   <Copy size={12} />
                                   <span className="hidden sm:inline">OPML</span>
                               </button>
-                              <span className="text-xs font-mono text-stone-500 bg-stone-300/50 px-2 py-1 rounded">{filteredCards.length} cards</span>
+                              <span className="text-xs font-mono text-stone-500 bg-stone-300/50 px-2 py-1 rounded">{filteredCards.length}枚</span>
                           </div>
                     </div>
 
