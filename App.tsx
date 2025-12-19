@@ -379,88 +379,72 @@ export default function App() {
     });
   }, [cards, isLoading]);
   useEffect(() => { 
-    if (!dropboxToken || isLoading) return;
+      if (!dropboxToken || isLoading) return;
+      if (syncMetadata.localChanges.length === 0) return; // 変更がある時だけ
 
-    const timeoutId = setTimeout(async () => {
-      try {
-        console.log('Auto-sync triggered'); 
-        
-        // クリーンアップ（30日以上経過した削除済みカードを物理削除）
-        const cleanedCards = cleanupDeletedCards(cards, 30);
-        
-        // 削除されたカードをDropboxからも物理削除
-        if (cleanedCards.length !== cards.length) {
-          console.log('Cleaned deleted cards:', cards.length - cleanedCards.length);
+      const timeoutId = setTimeout(async () => {
+        try {
+          console.log('Auto-sync: 10s after last change'); 
           
-          const deletedCards = cards.filter(c => 
-            !cleanedCards.find(cc => cc.id === c.id)
-          );
+          const cleanedCards = cleanupDeletedCards(cards, 30);
           
-          // Dropboxから物理削除
-          for (const card of deletedCards) {
-            try {
-              console.log('Permanently deleting from Dropbox:', card.id, card.title);
-              await permanentlyDeleteCardFromDropbox(card);
-            } catch (error) {
-              console.error(`Failed to permanently delete card ${card.id}:`, error);
+          if (cleanedCards.length !== cards.length) {
+            console.log('Cleaned deleted cards');
+            const deletedCards = cards.filter(c => 
+              !cleanedCards.find(cc => cc.id === c.id)
+            );
+            
+            for (const card of deletedCards) {
+              try {
+                await permanentlyDeleteCardFromDropbox(card);
+              } catch (error) {
+                console.error(`Failed to permanently delete card ${card.id}:`, error);
+              }
             }
+            
+            setCards(cleanedCards);
+            return;
           }
-          
-          setCards(cleanedCards);
-          return;
-        }
 
-        // 変更されたカードのみをアップロード
-        if (syncMetadata.localChanges.length > 0) {
-          console.log('Syncing changes:', syncMetadata.localChanges);
-          
-          const changedCards = cleanedCards.filter(c => 
-            syncMetadata.localChanges.includes(c.id)
-          );
-          
-          console.log('Changed cards to sync:', changedCards.length);
-          
-          // 削除されたカードは論理削除としてアップロード
-          const deletedCards = changedCards.filter(c => c.isDeleted);
-          for (const card of deletedCards) {
-            try {
-              console.log('Uploading deleted card to Dropbox:', card.id, card.title);
-              await deleteCardFromDropbox(card); // 論理削除としてアップロード
-            } catch (error) {
-              console.error(`Failed to upload deleted card ${card.id}:`, error);
+          if (syncMetadata.localChanges.length > 0) {
+            const changedCards = cleanedCards.filter(c => 
+              syncMetadata.localChanges.includes(c.id)
+            );
+            
+            const deletedCards = changedCards.filter(c => c.isDeleted);
+            for (const card of deletedCards) {
+              try {
+                await deleteCardFromDropbox(card);
+              } catch (error) {
+                console.error(`Failed to upload deleted card ${card.id}:`, error);
+              }
             }
-          }
-          
-          // 更新・新規カードをアップロード
-          const activeCards = changedCards.filter(c => !c.isDeleted);
-          for (const card of activeCards) {
-            try {
-              console.log('Uploading card to Dropbox:', card.id, card.title);
-              await uploadCardToDropbox(card);
-            } catch (error) {
-              console.error(`Failed to upload card ${card.id}:`, error);
+            
+            const activeCards = changedCards.filter(c => !c.isDeleted);
+            for (const card of activeCards) {
+              try {
+                await uploadCardToDropbox(card);
+              } catch (error) {
+                console.error(`Failed to upload card ${card.id}:`, error);
+              }
             }
+            
+            setSyncMetadata(prev => ({
+              ...prev,
+              lastSyncTime: Date.now(),
+              localChanges: []
+            }));
           }
-          
-          console.log('Sync completed');
-          
-          // 同期完了後、localChangesをクリア
-          setSyncMetadata(prev => ({
-            ...prev,
-            lastSyncTime: Date.now(),
-            localChanges: []
-          }));
+        } catch (error) {
+          console.error('Sync error:', error);
+          if (error instanceof Error && (error.message.includes('Token refresh failed') || error.message.includes('Unauthorized'))) {
+            handleDisconnectDropbox();
+          }
         }
-      } catch (error) {
-        console.error('Sync error:', error);
-        if (error instanceof Error && (error.message.includes('Token refresh failed') || error.message.includes('Unauthorized'))) {
-          handleDisconnectDropbox();
-        }
-      }
-    }, 3000);
+      }, 10000);
 
-    return () => clearTimeout(timeoutId); 
-  }, [cards, dropboxToken, isLoading]);
+      return () => clearTimeout(timeoutId); 
+  }, [syncMetadata.localChanges, dropboxToken, isLoading]);
   useEffect(() => { 
     const handleKeyDown = (e: KeyboardEvent) => { 
       // エディターやサイドバーが開いている時、入力フィールドにフォーカスがある時はスキップ
