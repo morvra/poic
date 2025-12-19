@@ -651,6 +651,59 @@ export const permanentlyDeleteCardFromDropbox = async (card: Card): Promise<void
   }
 };
 
+/**
+ * Dropbox上でカードファイルの名前を変更
+ */
+export const renameCardInDropbox = async (oldCard: Card, newTitle: string): Promise<void> => {
+  const token = await getAccessToken();
+  if (!token) throw new Error('Unauthorized');
+
+  const oldPath = getCardFilePath(oldCard);
+  const newCard = { ...oldCard, title: newTitle };
+  const newPath = getCardFilePath(newCard);
+
+  // 既に同じパスの場合はスキップ
+  if (oldPath === newPath) {
+    console.log('File path unchanged, skipping rename');
+    return;
+  }
+
+  try {
+    const response = await fetch('https://api.dropboxapi.com/2/files/move_v2', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from_path: oldPath,
+        to_path: newPath,
+        autorename: false,
+        allow_ownership_transfer: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      
+      // 409エラー（元ファイルが存在しない、または移動先が既に存在）の場合は新規アップロード
+      if (response.status === 409) {
+        console.log('File not found or destination exists, uploading as new file');
+        await uploadCardToDropbox(newCard);
+        return;
+      }
+      
+      throw new Error(`Failed to rename card: ${errorText}`);
+    }
+    
+    console.log('Successfully renamed:', oldCard.title, '→', newTitle);
+  } catch (error) {
+    console.error(`Error renaming card ${oldCard.id}:`, error);
+    // エラーの場合は新規アップロードにフォールバック
+    console.log('Falling back to new file upload');
+    await uploadCardToDropbox(newCard);
+  }
+};
 
 // --- Authentication Status ---
 export const isAuthenticated = (): boolean => {

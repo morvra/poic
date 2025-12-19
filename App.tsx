@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Card, CardType, ViewMode, PoicStats } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern, cleanupDeletedCards } from './utils';
-import { uploadToDropbox, downloadFromDropbox, isAuthenticated, isAuthenticatedAsync, logout, initiateAuth, handleAuthCallback, uploadCardToDropbox, deleteCardFromDropbox, permanentlyDeleteCardFromDropbox } from './utils/dropbox';
+import { uploadToDropbox, downloadFromDropbox, isAuthenticated, isAuthenticatedAsync, logout, initiateAuth, handleAuthCallback, uploadCardToDropbox, deleteCardFromDropbox, permanentlyDeleteCardFromDropbox, renameCardInDropbox } from './utils/dropbox';
 import type { SyncMetadata } from './types';
 import { idbStorage, migrateFromLocalStorage } from './utils/indexedDB';
 import { CardItem } from './components/CardItem';
@@ -855,11 +855,10 @@ export default function App() {
               const oldTitleRegex = new RegExp(`\\[\\[${escapedOldTitle}\\]\\]`, 'g');
               const newLink = `[[${cardData.title}]]`;
 
-              // タイトル変更時は旧ファイルを削除するため、旧カード情報を保持
+              // タイトル変更時はDropboxでファイル名変更
               if (isDropboxConnected) {
-                  // 旧ファイル削除用のマーカー
-                  deleteCardFromDropbox(oldCard).catch(err => {
-                      console.error('Failed to delete old file:', err);
+                  renameCardInDropbox(oldCard, cardData.title).catch(err => {
+                      console.error('Failed to rename file in Dropbox:', err);
                   });
               }
 
