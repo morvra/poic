@@ -596,9 +596,32 @@ export const downloadFromDropbox = async (): Promise<Card[]> => {
 };
 
 /**
- * Dropboxからカードを削除
+ * Dropboxからカードを削除 → 論理削除（isDeleted: true）に変更
  */
 export const deleteCardFromDropbox = async (card: Card): Promise<void> => {
+  const token = await getAccessToken();
+  if (!token) throw new Error('Unauthorized');
+
+  // カードを削除状態にしてアップロード
+  const deletedCard = {
+    ...card,
+    isDeleted: true,
+    deletedAt: card.deletedAt || Date.now(),
+    updatedAt: Date.now()
+  };
+
+  try {
+    await uploadCardToDropbox(deletedCard);
+    console.log('Successfully marked as deleted:', card.title);
+  } catch (error) {
+    console.error(`Error marking card ${card.id} as deleted:`, error);
+    throw error;
+  }
+};
+/**
+ * Dropboxから削除済みカードを物理削除（クリーンアップ用）
+ */
+export const permanentlyDeleteCardFromDropbox = async (card: Card): Promise<void> => {
   const token = await getAccessToken();
   if (!token) throw new Error('Unauthorized');
 
@@ -619,15 +642,17 @@ export const deleteCardFromDropbox = async (card: Card): Promise<void> => {
     if (!response.ok && response.status !== 409) {
       // 409 = file not found は無視
       const errorText = await response.text();
-      console.warn(`Failed to delete card ${card.id}:`, errorText);
+      console.warn(`Failed to permanently delete card ${card.id}:`, errorText);
     } else {
-      console.log('Successfully deleted:', card.title);
+      console.log('Successfully permanently deleted from Dropbox:', card.title);
     }
   } catch (error) {
-    console.error(`Error deleting card ${card.id}:`, error);
+    console.error(`Error permanently deleting card ${card.id}:`, error);
   }
 };
 
+
+// --- Authentication Status ---
 export const isAuthenticated = (): boolean => {
   // 同期的にチェック（localStorage経由で確認）
   return !!localStorage.getItem('dropbox_refresh_token');
@@ -644,4 +669,18 @@ export const logout = async () => {
   await idbStorage.removeItem('dropbox_refresh_token');
   await idbStorage.removeItem('dropbox_expires_at');
   await idbStorage.removeItem('dropbox_code_verifier');
+};
+
+export { 
+  initiateAuth, 
+  handleAuthCallback, 
+  getAccessToken, 
+  uploadCardToDropbox, 
+  uploadToDropbox, 
+  downloadFromDropbox, 
+  deleteCardFromDropbox,
+  permanentlyDeleteCardFromDropbox,
+  isAuthenticated, 
+  isAuthenticatedAsync, 
+  logout 
 };

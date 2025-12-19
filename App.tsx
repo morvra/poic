@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Card, CardType, ViewMode, PoicStats } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern, cleanupDeletedCards } from './utils';
-import { uploadToDropbox, downloadFromDropbox, isAuthenticated, isAuthenticatedAsync, logout, initiateAuth, handleAuthCallback, uploadCardToDropbox, deleteCardFromDropbox } from './utils/dropbox';
+import { uploadToDropbox, downloadFromDropbox, isAuthenticated, isAuthenticatedAsync, logout, initiateAuth, handleAuthCallback, uploadCardToDropbox, deleteCardFromDropbox, permanentlyDeleteCardFromDropbox } from './utils/dropbox';
 import type { SyncMetadata } from './types';
 import { idbStorage, migrateFromLocalStorage } from './utils/indexedDB';
 import { CardItem } from './components/CardItem';
@@ -385,10 +385,27 @@ export default function App() {
       try {
         console.log('Auto-sync triggered'); 
         
-        // クリーンアップ
+        // クリーンアップ（30日以上経過した削除済みカードを物理削除）
         const cleanedCards = cleanupDeletedCards(cards, 30);
+        
+        // 削除されたカードをDropboxからも物理削除
         if (cleanedCards.length !== cards.length) {
-          console.log('Cleaned deleted cards');
+          console.log('Cleaned deleted cards:', cards.length - cleanedCards.length);
+          
+          const deletedCards = cards.filter(c => 
+            !cleanedCards.find(cc => cc.id === c.id)
+          );
+          
+          // Dropboxから物理削除
+          for (const card of deletedCards) {
+            try {
+              console.log('Permanently deleting from Dropbox:', card.id, card.title);
+              await permanentlyDeleteCardFromDropbox(card);
+            } catch (error) {
+              console.error(`Failed to permanently delete card ${card.id}:`, error);
+            }
+          }
+          
           setCards(cleanedCards);
           return;
         }
@@ -403,14 +420,14 @@ export default function App() {
           
           console.log('Changed cards to sync:', changedCards.length);
           
-          // 削除されたカードはDropboxからも削除
+          // 削除されたカードは論理削除としてアップロード
           const deletedCards = changedCards.filter(c => c.isDeleted);
           for (const card of deletedCards) {
             try {
-              console.log('Deleting card from Dropbox:', card.id, card.title);
-              await deleteCardFromDropbox(card);
+              console.log('Uploading deleted card to Dropbox:', card.id, card.title);
+              await deleteCardFromDropbox(card); // 論理削除としてアップロード
             } catch (error) {
-              console.error(`Failed to delete card ${card.id} from Dropbox:`, error);
+              console.error(`Failed to upload deleted card ${card.id}:`, error);
             }
           }
           
@@ -587,13 +604,18 @@ export default function App() {
       console.log('Local cards:', cards.filter(c => !c.isDeleted).length);
       
       if (forceFullSync) {
-        // フル同期: すべてのカードをアップロード
-        const activeCards = cards.filter(c => !c.isDeleted);
-        console.log('Uploading all local cards:', activeCards.length);
+        // フル同期: すべてのカード（削除済み含む）をアップロード
+        const allCards = cards;
+        console.log('Uploading all cards:', allCards.length);
         
-        for (const card of activeCards) {
+        for (const card of allCards) {
           try {
-            await uploadCardToDropbox(card);
+            if (card.isDeleted) {
+              // 削除済みカードは論理削除としてアップロード
+              await deleteCardFromDropbox(card);
+            } else {
+              await uploadCardToDropbox(card);
+            }
           } catch (error) {
             console.error(`Failed to upload ${card.id}:`, error);
           }
@@ -650,14 +672,14 @@ export default function App() {
           
           console.log('Changed cards to sync:', changedCards.length);
           
-          // 削除されたカードはDropboxからも削除
+          // 削除されたカードは論理削除としてアップロード
           const deletedCards = changedCards.filter(c => c.isDeleted);
           for (const card of deletedCards) {
             try {
-              console.log('Deleting card from Dropbox:', card.id, card.title);
-              await deleteCardFromDropbox(card);
+              console.log('Uploading deleted card to Dropbox:', card.id, card.title);
+              await deleteCardFromDropbox(card); // 論理削除
             } catch (error) {
-              console.error(`Failed to delete card ${card.id} from Dropbox:`, error);
+              console.error(`Failed to upload deleted card ${card.id}:`, error);
             }
           }
           
