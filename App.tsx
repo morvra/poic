@@ -1031,6 +1031,12 @@ return (
                                   <Menu size={20} />
                               </button>
                               
+                              <span className="text-sm text-stone-600 font-medium ml-2">
+                                  {selectedCardIds.size}件
+                              </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                               <button 
                                   onClick={handleToggleSelection} 
                                   className="text-stone-600 hover:bg-stone-300 px-3 py-2 rounded-md transition-colors flex items-center gap-1"
@@ -1038,13 +1044,7 @@ return (
                                   <X size={18} />
                                   <span className="text-sm font-medium hidden sm:inline">キャンセル</span>
                               </button>
-                              
-                              <span className="text-sm text-stone-600 font-medium ml-2">
-                                  {selectedCardIds.size}件
-                              </span>
-                          </div>
-                          
-                          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                            
                               <button 
                                   onClick={handleSelectAll} 
                                   title="全選択" 
