@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Card, CardType, ViewMode, PoicStats } from './types';
+import { Card, CardType, ViewMode, PoicStats, SortOrder } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern, cleanupDeletedCards } from './utils';
 import { uploadToDropbox, downloadFromDropbox, isAuthenticated, isAuthenticatedAsync, logout, initiateAuth, handleAuthCallback, uploadCardToDropbox, deleteCardFromDropbox, permanentlyDeleteCardFromDropbox, renameCardInDropbox } from './utils/dropbox';
 import type { SyncMetadata } from './types';
@@ -64,6 +64,11 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeStack, setActiveStack] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<CardType | null>(null);
+
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => {
+    const saved = localStorage.getItem('poic-sort-order');
+    return (saved as SortOrder) || 'created-desc';
+  });
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(() => {
@@ -213,7 +218,9 @@ export default function App() {
         result = result.filter(c => c.type === activeType);
     }
     
+    // 並び順の適用
     if (viewMode === 'GTD') {
+      // GTDモードは期限ベースの並び順を維持
       result = [...result].sort((a, b) => {
         if (a.completed !== b.completed) return a.completed ? 1 : -1;
         if (!a.dueDate) return 1;
@@ -221,10 +228,24 @@ export default function App() {
         return a.dueDate - b.dueDate;
       });
     } else {
-        result = [...result].sort((a, b) => b.createdAt - a.createdAt);
+      // その他のモードでは選択された並び順を適用
+      result = [...result].sort((a, b) => {
+        switch (sortOrder) {
+          case 'created-desc':
+            return b.createdAt - a.createdAt;
+          case 'created-asc':
+            return a.createdAt - b.createdAt;
+          case 'updated-desc':
+            return b.updatedAt - a.updatedAt;
+          case 'updated-asc':
+            return a.updatedAt - b.updatedAt;
+          default:
+            return b.createdAt - a.createdAt;
+        }
+      });
     }
     return result;
-  }, [cards, viewMode, activeStack, activeType, searchQuery]);
+  }, [cards, viewMode, activeStack, activeType, searchQuery, sortOrder]);
 
   const { pinnedCards, unpinnedCards } = useMemo(() => {
       const pinned: Card[] = [];
@@ -275,6 +296,10 @@ export default function App() {
   }, [unpinnedCards, viewMode]);
 
   // --- Effects ---
+  useEffect(() => {
+    localStorage.setItem('poic-sort-order', sortOrder);
+  }, [sortOrder]);
+
   useEffect(() => {
   const initializeData = async () => {
       try {
@@ -1083,7 +1108,7 @@ return (
                           </div>
                       </>
                   ) : (
-                      // 通常モード時のヘッダー（既存のコード）
+                      // 通常モード時のヘッダー
                       <>
                           <div className="flex items-center gap-3 flex-1">
                               <button 
@@ -1131,6 +1156,24 @@ return (
                                   )}
                               </div>
                               
+                              {/* 並び順選択ドロップダウン（GTDモード以外で表示） */}
+                              {viewMode !== 'GTD' && (
+                                  <div className="hidden sm:flex items-center gap-2 text-xs text-stone-500 bg-white px-3 py-1.5 rounded-full border border-stone-200 shadow-sm">
+                                      <Filter size={12} />
+                                      <select
+                                          value={sortOrder}
+                                          onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                                          className="bg-transparent border-none focus:outline-none text-stone-600 cursor-pointer"
+                                      >
+                                          <option value="created-desc">作成日: 新しい順</option>
+                                          <option value="created-asc">作成日: 古い順</option>
+                                          <option value="updated-desc">更新日: 新しい順</option>
+                                          <option value="updated-asc">更新日: 古い順</option>
+                                      </select>
+                                  </div>
+                              )}
+                              
+                              {/* GTDモード用の並び順表示 */}
                               {viewMode === 'GTD' && (
                                   <div className="hidden sm:flex items-center gap-2 text-xs text-stone-500 bg-white px-3 py-1.5 rounded-full border border-stone-200 shadow-sm">
                                       <Filter size={12} />

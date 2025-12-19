@@ -23,6 +23,8 @@ export interface Card {
 
 export type ViewMode = 'All' | 'GTD' | 'Stack' | 'Type';
 
+export type SortOrder = 'created-desc' | 'created-asc' | 'updated-desc' | 'updated-asc';
+
 export interface PoicStats {
   total: number;
   record: number;
