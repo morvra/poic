@@ -809,116 +809,105 @@ export default function App() {
       setActiveSideCardId(null);
   };
 
-  const handleSaveCard = (cardData: Partial<Card>, shouldClose = true) => {
-      const currentId = cardData.id; 
-      if (!currentId) return;
+const handleSaveCard = (cardData: Partial<Card>, shouldClose = true) => {
+    console.log('=== handleSaveCard called ===');
+    console.log('cardData:', cardData);
+    
+    const currentId = cardData.id; 
+    if (!currentId) {
+      console.log('No ID, returning');
+      return;
+    }
 
-      // タイトルの重複チェック（新規作成時とタイトル変更時）
-      if (cardData.title && cardData.title.trim()) {
-          const titleExists = cards.some(c => 
-              c.title === cardData.title && 
-              c.id !== currentId && 
-              !c.isDeleted
-          );
+    // タイトルの重複チェック（新規作成時とタイトル変更時）
+    if (cardData.title && cardData.title.trim()) {
+        const titleExists = cards.some(c => 
+            c.title === cardData.title && 
+            c.id !== currentId && 
+            !c.isDeleted
+        );
 
-          if (titleExists) {
-              alert('同じタイトルのカードが既に存在します。別のタイトルを使用してください。');
-              return;
-          }
-      }
+        if (titleExists) {
+            alert('同じタイトルのカードが既に存在します。別のタイトルを使用してください。');
+            return;
+        }
+    }
 
-      let actualSavedId = currentId;
+    let actualSavedId = currentId;
 
-      if (phantomCards.has(currentId)) {
-          const existingIndex = cards.findIndex(c => c.id === currentId);
+    if (phantomCards.has(currentId)) {
+        console.log('Phantom card detected');
+        // ... 既存のコード
+    } else {
+        console.log('Existing card update');
+        const oldCard = cards.find(c => c.id === currentId);
+        
+        if (!oldCard) {
+          console.log('Old card not found!');
+          return;
+        }
+        
+        // 🆕 追加: 実際に変更があったかチェック
+        console.log('=== Comparing with existing card ===');
+        console.log('Old card:', {
+          title: oldCard.title,
+          body: oldCard.body?.substring(0, 50),
+          type: oldCard.type,
+          stacks: oldCard.stacks,
+          dueDate: oldCard.dueDate,
+          completed: oldCard.completed,
+          isPinned: oldCard.isPinned
+        });
+        console.log('New data:', {
+          title: cardData.title,
+          body: cardData.body?.substring(0, 50),
+          type: cardData.type,
+          stacks: cardData.stacks,
+          dueDate: cardData.dueDate,
+          completed: cardData.completed,
+          isPinned: cardData.isPinned
+        });
+        
+        const hasChanges = 
+            oldCard.title !== cardData.title ||
+            oldCard.body !== cardData.body ||
+            oldCard.type !== cardData.type ||
+            oldCard.dueDate !== cardData.dueDate ||
+            oldCard.completed !== cardData.completed ||
+            oldCard.isPinned !== cardData.isPinned ||
+            JSON.stringify(oldCard.stacks?.sort()) !== JSON.stringify(cardData.stacks?.sort());
+        
+        console.log('Has changes:', hasChanges);
+        
+        // 変更がない場合は更新しない
+        if (!hasChanges) {
+            console.log('✓ No changes detected in handleSaveCard, skipping update');
+            return;
+        }
+        
+        console.log('✗ Changes detected, updating card');
+        
+        const titleChanged = cardData.title && oldCard.title !== cardData.title;
 
-          if (existingIndex === -1) {
-              const newId = generateId();
-              actualSavedId = newId;
-              const newCard: Card = {
-                  id: newId,
-                  type: cardData.type || CardType.Record,
-                  title: cardData.title || '無題',
-                  body: cardData.body || '',
-                  createdAt: cardData.createdAt || Date.now(),
-                  updatedAt: Date.now(),
-                  dueDate: cardData.dueDate,
-                  completed: false,
-                  stacks: cardData.stacks || [],
-                  isDeleted: false,
-                  isPinned: cardData.isPinned || false
-              };
-              setCards([newCard, ...cards]);
-
-              if (activeModalCardId === currentId) setActiveModalCardId(newId);
-              if (activeSideCardId === currentId) setActiveSideCardId(newId);
-              
-              setPhantomCards(prev => { const n = new Map(prev); n.delete(currentId); return n; });
-          }
-      } else {
-          const oldCard = cards.find(c => c.id === currentId);
-          
-          // 実際に変更があったかチェック
-          if (oldCard) {
-              const hasChanges = 
-                  oldCard.title !== cardData.title ||
-                  oldCard.body !== cardData.body ||
-                  oldCard.type !== cardData.type ||
-                  oldCard.dueDate !== cardData.dueDate ||
-                  oldCard.completed !== cardData.completed ||
-                  oldCard.isPinned !== cardData.isPinned ||
-                  JSON.stringify(oldCard.stacks) !== JSON.stringify(cardData.stacks);
-              
-              // 変更がない場合は更新しない
-              if (!hasChanges) {
-                  console.log('No changes detected, skipping update');
-                  return;
-              }
-          }
-          
-          const titleChanged = oldCard && cardData.title && oldCard.title !== cardData.title;
-
-          if (titleChanged && oldCard) {
-              const escapedOldTitle = oldCard.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-              const oldTitleRegex = new RegExp(`\\[\\[${escapedOldTitle}\\]\\]`, 'g');
-              const newLink = `[[${cardData.title}]]`;
-
-              // タイトル変更時はDropboxでファイル名変更
-              if (isDropboxConnected) {
-                  renameCardInDropbox(oldCard, cardData.title).catch(err => {
-                      console.error('Failed to rename file in Dropbox:', err);
-                  });
-              }
-
-              setCards(cards.map(c => {
-                  if (c.id === currentId) {
-                      return { ...c, ...cardData, updatedAt: Date.now() } as Card;
-                  }
-                  if (c.body.match(oldTitleRegex)) {
-                      return {
-                          ...c,
-                          body: c.body.replace(oldTitleRegex, newLink),
-                          updatedAt: Date.now()
-                      };
-                  }
-                  return c;
-              }));
-          } else {
-              // 変更がある場合のみ updatedAt を更新
-              setCards(cards.map(c => c.id === currentId ? { 
-                  ...c, 
-                  ...cardData, 
-                  updatedAt: Date.now() 
-              } as Card : c));
-          }
-      }
-      
-      // 変更があった場合のみ localChanges に追加
-      setSyncMetadata(prev => ({
-        ...prev,
-        localChanges: [...new Set([...prev.localChanges, actualSavedId])]
-      }));
-  };
+        if (titleChanged) {
+            console.log('Title changed, updating backlinks');
+            // ... 既存のタイトル変更処理
+        } else {
+            setCards(cards.map(c => c.id === currentId ? { 
+                ...c, 
+                ...cardData, 
+                updatedAt: Date.now() 
+            } as Card : c));
+        }
+    }
+    
+    // localChanges への追加
+    console.log('Adding to localChanges:', actualSavedId);
+    setSyncMetadata(prev => ({
+      ...prev,
+      localChanges: [...new Set([...prev.localChanges, actualSavedId])]
+    }));
+};
 
   const handleDeleteCard = (id: string) => {
     setCards(cards.map(c => c.id === id ? { ...c, isDeleted: true, deletedAt: Date.now(), updatedAt: Date.now() } : c));

@@ -227,8 +227,15 @@ export const Editor: React.FC<EditorProps> = ({
       };
   }, [title, body, type, dueDate, stacks, createdAt, completed, isPinned]);
 
-  const handleAutoSave = () => {
-    if (!title.trim() && !body.trim()) return;
+const handleAutoSave = () => {
+    console.log('=== handleAutoSave called ===');
+    console.log('title:', title);
+    console.log('body:', body);
+    
+    if (!title.trim() && !body.trim()) {
+      console.log('Skipping: empty title and body');
+      return;
+    }
     
     // 新規カード（phantom）の場合は自動保存をスキップ
     const isNewCard = !initialCard?.id || 
@@ -240,7 +247,7 @@ export const Editor: React.FC<EditorProps> = ({
       return;
     }
     
-    // 実際に変更があるかチェック
+    // 🆕 追加: 実際に変更があるかチェック
     if (initialCard) {
         const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
         const createdTimestamp = new Date(createdAt).getTime();
@@ -248,6 +255,15 @@ export const Editor: React.FC<EditorProps> = ({
         if (type === CardType.GTD && dueDate) {
             dueTimestamp = new Date(dueDate).getTime();
         }
+        
+        console.log('=== Change Detection ===');
+        console.log('Title changed:', initialCard.title, '!==', title, '=', initialCard.title !== title);
+        console.log('Body changed:', initialCard.body?.substring(0, 50), '!==', body?.substring(0, 50), '=', initialCard.body !== body);
+        console.log('Type changed:', initialCard.type, '!==', type, '=', initialCard.type !== type);
+        console.log('DueDate changed:', initialCard.dueDate, '!==', dueTimestamp, '=', initialCard.dueDate !== dueTimestamp);
+        console.log('Completed changed:', initialCard.completed, '!==', completed, '=', (type === CardType.GTD && initialCard.completed !== completed));
+        console.log('isPinned changed:', initialCard.isPinned, '!==', isPinned, '=', initialCard.isPinned !== isPinned);
+        console.log('Stacks changed:', JSON.stringify(initialCard.stacks?.sort()), '!==', JSON.stringify(stackList.sort()));
         
         const hasChanges = 
             initialCard.title !== title ||
@@ -258,10 +274,14 @@ export const Editor: React.FC<EditorProps> = ({
             initialCard.isPinned !== isPinned ||
             JSON.stringify(initialCard.stacks?.sort()) !== JSON.stringify(stackList.sort());
         
+        console.log('Has changes:', hasChanges);
+        
         if (!hasChanges) {
-            console.log('No changes detected in auto-save, skipping update');
+            console.log('✓ No changes detected in auto-save, skipping update');
             return;
         }
+        
+        console.log('✗ Changes detected, proceeding with save');
     }
     
     let dueTimestamp: number | undefined = undefined;
@@ -270,6 +290,15 @@ export const Editor: React.FC<EditorProps> = ({
     }
     const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
     const createdTimestamp = new Date(createdAt).getTime();
+    
+    console.log('Calling onSave with:', {
+      id: initialCard?.id,
+      title,
+      type,
+      hasBody: !!body,
+      stackList
+    });
+    
     onSave({
       id: initialCard?.id,
       title,
