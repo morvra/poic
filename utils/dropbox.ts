@@ -671,4 +671,3 @@ export const logout = async () => {
   await idbStorage.removeItem('dropbox_code_verifier');
 };
 
-export { permanentlyDeleteCardFromDropbox };
