@@ -284,7 +284,6 @@ const markdownToCard = (markdown: string, filename: string): Card | null => {
     let cardId = frontmatter.id;
     if (!cardId) {
       cardId = generateId();
-      console.log(`Generated ID for ${filename}: ${cardId}`);
     }
 
     const now = Date.now();
@@ -428,8 +427,6 @@ export const uploadCardToDropbox = async (card: Card): Promise<void> => {
     console.error('Upload error details:', errorText);
     throw new Error(`Failed to upload card ${card.id}: ${errorText}`);
   }
-  
-  console.log('Successfully uploaded:', card.title);
 };
 
 /**
@@ -484,7 +481,6 @@ const downloadCardFromDropbox = async (token: string, filePath: string, serverMo
         const metadata = JSON.parse(dropboxMetadata);
         if (metadata.server_modified) {
           fileModifiedTime = new Date(metadata.server_modified).getTime();
-          console.log('Dropbox file modified time:', new Date(fileModifiedTime).toISOString());
         }
       } catch (e) {
         console.warn('Failed to parse Dropbox metadata:', e);
@@ -496,8 +492,6 @@ const downloadCardFromDropbox = async (token: string, filePath: string, serverMo
       fileModifiedTime = new Date(serverModified).getTime();
     }
     
-    console.log('Downloaded file:', filename);
-    
     const card = markdownToCard(markdown, filename);
     
     if (card && fileModifiedTime) {
@@ -506,15 +500,8 @@ const downloadCardFromDropbox = async (token: string, filePath: string, serverMo
       
       // Dropboxで編集された可能性がある場合は、ファイルの更新時刻を使用
       if (fileModifiedTime > frontmatterUpdated) {
-        console.log(`File was modified on Dropbox (${new Date(fileModifiedTime).toISOString()}), using file timestamp`);
         card.updatedAt = fileModifiedTime;
       }
-    }
-    
-    if (card) {
-      console.log('Parsed card:', card.id, card.title, 'updatedAt:', new Date(card.updatedAt).toISOString());
-    } else {
-      console.error('Failed to parse card from:', filename);
     }
     
     return card;
@@ -532,8 +519,6 @@ export const downloadFromDropbox = async (): Promise<Card[]> => {
   if (!token) throw new Error('Unauthorized');
 
   try {
-    console.log('Downloading from Dropbox...');
-    
     const folderPath = CARDS_FOLDER || '';
     
     const listResponse = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
@@ -548,8 +533,6 @@ export const downloadFromDropbox = async (): Promise<Card[]> => {
       }),
     });
 
-    console.log('List response status:', listResponse.status);
-
     if (!listResponse.ok) {
       if (listResponse.status === 409) {
         console.log('Root directory is empty or inaccessible');
@@ -563,16 +546,11 @@ export const downloadFromDropbox = async (): Promise<Card[]> => {
     const listData = await listResponse.json();
     const entries = listData.entries || [];
     
-    console.log('Found entries:', entries.length);
-
     // Markdownファイルのみをフィルタ
     const markdownFiles = entries.filter((entry: any) => 
       entry['.tag'] === 'file' && 
       entry.name.endsWith('.md')
     );
-    
-    console.log('Markdown files found:', markdownFiles.length);
-    console.log('Files:', markdownFiles.map((f: any) => `${f.name} (modified: ${f.server_modified})`));
 
     // 各ファイルをダウンロード（並列処理）
     const batchSize = 5;
@@ -587,7 +565,6 @@ export const downloadFromDropbox = async (): Promise<Card[]> => {
       cards.push(...batchResults.filter((card): card is Card => card !== null));
     }
 
-    console.log('Downloaded cards:', cards.length);
     return cards;
   } catch (error) {
     console.error('Error downloading from Dropbox:', error);
@@ -612,7 +589,6 @@ export const deleteCardFromDropbox = async (card: Card): Promise<void> => {
 
   try {
     await uploadCardToDropbox(deletedCard);
-    console.log('Successfully marked as deleted:', card.title);
   } catch (error) {
     console.error(`Error marking card ${card.id} as deleted:`, error);
     throw error;
@@ -664,7 +640,6 @@ export const renameCardInDropbox = async (oldCard: Card, newTitle: string): Prom
 
   // 既に同じパスの場合はスキップ
   if (oldPath === newPath) {
-    console.log('File path unchanged, skipping rename');
     return;
   }
 
@@ -695,8 +670,6 @@ export const renameCardInDropbox = async (oldCard: Card, newTitle: string): Prom
       
       throw new Error(`Failed to rename card: ${errorText}`);
     }
-    
-    console.log('Successfully renamed:', oldCard.title, '→', newTitle);
   } catch (error) {
     console.error(`Error renaming card ${oldCard.id}:`, error);
     // エラーの場合は新規アップロードにフォールバック
