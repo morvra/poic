@@ -56,7 +56,7 @@ export const Editor: React.FC<EditorProps> = ({
   );
   const [stacks, setStacks] = useState(initialCard?.stacks?.join(', ') || '');
   const [completed, setCompleted] = useState(initialCard?.completed || false);
-  const [isPinned, setIsPinned] = useState<number | boolean>(initialCard?.isPinned || false);
+  const [isPinned, setIsPinned] = useState<number | boolean | undefined>(initialCard?.isPinned);
   
   const [isEditingBody, setIsEditingBody] = useState(
     !initialCard || !initialCard.id || initialCard.id.startsWith('new-') || initialCard.id.startsWith('phantom-')
@@ -202,7 +202,7 @@ export const Editor: React.FC<EditorProps> = ({
           setCreatedAt(new Date(initialCard.createdAt - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16));
           setStacks(initialCard.stacks?.join(', ') || '');
           setCompleted(initialCard.completed || false);
-          setIsPinned(initialCard.isPinned || false);
+          setIsPinned(initialCard.isPinned);
           setShowDeleteConfirm(false);
           
           if (!initialCard.id) {
@@ -237,7 +237,6 @@ const handleAutoSave = () => {
       return;
     }
     
-    // 新規カード（phantom）の場合は自動保存をスキップ
     const isNewCard = !initialCard?.id || 
                       initialCard.id.startsWith('new-') || 
                       initialCard.id.startsWith('phantom-');
@@ -247,7 +246,6 @@ const handleAutoSave = () => {
       return;
     }
     
-    // 🆕 追加: 実際に変更があるかチェック
     if (initialCard) {
         const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
         const createdTimestamp = new Date(createdAt).getTime();
@@ -256,14 +254,20 @@ const handleAutoSave = () => {
             dueTimestamp = new Date(dueDate).getTime();
         }
         
+        // 🆕 isPinned の正規化関数
+        const normalizePin = (val: number | boolean | undefined) => {
+            if (val === undefined || val === false) return false;
+            return val;
+        };
+        
         console.log('=== Change Detection ===');
-        console.log('Title changed:', initialCard.title, '!==', title, '=', initialCard.title !== title);
-        console.log('Body changed:', initialCard.body?.substring(0, 50), '!==', body?.substring(0, 50), '=', initialCard.body !== body);
-        console.log('Type changed:', initialCard.type, '!==', type, '=', initialCard.type !== type);
-        console.log('DueDate changed:', initialCard.dueDate, '!==', dueTimestamp, '=', initialCard.dueDate !== dueTimestamp);
-        console.log('Completed changed:', initialCard.completed, '!==', completed, '=', (type === CardType.GTD && initialCard.completed !== completed));
-        console.log('isPinned changed:', initialCard.isPinned, '!==', isPinned, '=', initialCard.isPinned !== isPinned);
-        console.log('Stacks changed:', JSON.stringify(initialCard.stacks?.sort()), '!==', JSON.stringify(stackList.sort()));
+        console.log('Title changed:', initialCard.title !== title);
+        console.log('Body changed:', initialCard.body !== body);
+        console.log('Type changed:', initialCard.type !== type);
+        console.log('DueDate changed:', initialCard.dueDate !== dueTimestamp);
+        console.log('Completed changed:', (type === CardType.GTD && initialCard.completed !== completed));
+        console.log('isPinned changed:', normalizePin(initialCard.isPinned), '!==', normalizePin(isPinned));
+        console.log('Stacks changed:', JSON.stringify(initialCard.stacks?.sort()) !== JSON.stringify(stackList.sort()));
         
         const hasChanges = 
             initialCard.title !== title ||
@@ -271,7 +275,7 @@ const handleAutoSave = () => {
             initialCard.type !== type ||
             initialCard.dueDate !== dueTimestamp ||
             (type === CardType.GTD && initialCard.completed !== completed) ||
-            initialCard.isPinned !== isPinned ||
+            normalizePin(initialCard.isPinned) !== normalizePin(isPinned) ||
             JSON.stringify(initialCard.stacks?.sort()) !== JSON.stringify(stackList.sort());
         
         console.log('Has changes:', hasChanges);
@@ -290,14 +294,6 @@ const handleAutoSave = () => {
     }
     const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
     const createdTimestamp = new Date(createdAt).getTime();
-    
-    console.log('Calling onSave with:', {
-      id: initialCard?.id,
-      title,
-      type,
-      hasBody: !!body,
-      stackList
-    });
     
     onSave({
       id: initialCard?.id,
