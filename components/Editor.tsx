@@ -229,6 +229,17 @@ export const Editor: React.FC<EditorProps> = ({
 
   const handleAutoSave = () => {
     if (!title.trim() && !body.trim()) return;
+    
+    // 新規カード（phantom）の場合は自動保存をスキップ
+    const isNewCard = !initialCard?.id || 
+                      initialCard.id.startsWith('new-') || 
+                      initialCard.id.startsWith('phantom-');
+    
+    if (isNewCard) {
+      console.log('Skipping auto-save for new card');
+      return;
+    }
+    
     let dueTimestamp: number | undefined = undefined;
     if (type === CardType.GTD && dueDate) {
       dueTimestamp = new Date(dueDate).getTime();
