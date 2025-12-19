@@ -308,7 +308,6 @@ export default function App() {
       const migrationDone = await idbStorage.getItem(migrationKey);
       
       if (!migrationDone) {
-          console.log('Migrating from localStorage...');
           await migrateFromLocalStorage([
           'poic-cards',
           'poic-sidebar-state', 
@@ -369,7 +368,6 @@ export default function App() {
           window.history.replaceState(null, '', window.location.pathname); 
           
           // 初回同期: ローカルのカードをアップロードしてからダウンロード
-          console.log('Initial sync: uploading local cards...');
           const localCards = cards.filter(c => !c.isDeleted);
           if (localCards.length > 0) {
             await uploadToDropbox(localCards);
@@ -386,7 +384,6 @@ export default function App() {
         // 認証済みかチェック
         const authenticated = await isAuthenticatedAsync();
         if (authenticated) {
-          console.log('Already authenticated, syncing...');
           await syncDownload();
         }
       }
@@ -409,12 +406,9 @@ export default function App() {
 
       const timeoutId = setTimeout(async () => {
         try {
-          console.log('Auto-sync: 10s after last change'); 
-          
           const cleanedCards = cleanupDeletedCards(cards, 30);
           
           if (cleanedCards.length !== cards.length) {
-            console.log('Cleaned deleted cards');
             const deletedCards = cards.filter(c => 
               !cleanedCards.find(cc => cc.id === c.id)
             );
@@ -522,15 +516,10 @@ export default function App() {
   const syncDownload = async (token?: string) => { 
     setIsSyncing(true); 
     try {
-      console.log('Starting sync download...');
-      
       const remoteCards = await downloadFromDropbox();
-      console.log('Remote cards downloaded:', remoteCards.length);
       
       if (remoteCards && Array.isArray(remoteCards)) {
         setCards(prevCards => {
-          console.log('Previous local cards:', prevCards.length);
-          
           const mergedMap = new Map<string, Card>();
           
           // 既存カードをマップに
@@ -540,43 +529,28 @@ export default function App() {
             }
           });
           
-          console.log('Local cards (non-deleted):', mergedMap.size);
-          
           // リモートのカードをマージ（updatedAtが新しい方を優先）
           remoteCards.forEach((rc: Card) => {
             const local = mergedMap.get(rc.id);
             if (!local) {
-              console.log('New card from remote:', rc.id, rc.title);
               mergedMap.set(rc.id, rc);
             } else {
               // updatedAtを比較
               const localTime = local.updatedAt;
               const remoteTime = rc.updatedAt;
               
-              console.log(`Comparing ${rc.id}:`, {
-                local: new Date(localTime).toISOString(),
-                remote: new Date(remoteTime).toISOString(),
-                diff: remoteTime - localTime
-              });
-              
               if (remoteTime > localTime) {
-                console.log('→ Using remote version (newer)');
                 mergedMap.set(rc.id, rc);
               } else if (remoteTime < localTime) {
-                console.log('→ Keeping local version (newer)');
                 // ローカルの方が新しい場合は、Dropboxに再アップロード
                 uploadCardToDropbox(local).catch(err => {
                   console.error('Failed to sync local version to Dropbox:', err);
                 });
-              } else {
-                console.log('→ Same timestamp, keeping local');
               }
             }
           });
           
           const merged = Array.from(mergedMap.values());
-          console.log('Merged cards:', merged.length);
-          
           return merged;
         });
       }
@@ -609,13 +583,9 @@ export default function App() {
       const remoteCardIds = new Set(remoteCards.map(c => c.id));
       const localCardIds = new Set(cards.filter(c => !c.isDeleted).map(c => c.id));
       
-      console.log('Remote cards:', remoteCards.length);
-      console.log('Local cards:', cards.filter(c => !c.isDeleted).length);
-      
       if (forceFullSync) {
         // フル同期: すべてのカード（削除済み含む）をアップロード
         const allCards = cards;
-        console.log('Uploading all cards:', allCards.length);
         
         for (const card of allCards) {
           try {
@@ -642,15 +612,10 @@ export default function App() {
           !c.isDeleted && !localCardIds.has(c.id)
         );
         
-        console.log('Cards only in local:', localOnlyCards.length);
-        console.log('Cards only in remote:', remoteOnlyCards.length);
-        
         // ローカルオンリーのカードをアップロード
         if (localOnlyCards.length > 0) {
-          console.log('Uploading cards not in Dropbox:', localOnlyCards.length);
           for (const card of localOnlyCards) {
             try {
-              console.log('Uploading missing card:', card.id, card.title);
               await uploadCardToDropbox(card);
             } catch (error) {
               console.error(`Failed to upload ${card.id}:`, error);
@@ -660,11 +625,9 @@ export default function App() {
         
         // リモートオンリーのカードをローカルに追加
         if (remoteOnlyCards.length > 0) {
-          console.log('Adding cards from Dropbox:', remoteOnlyCards.length);
           setCards(prevCards => {
             const newCards = [...prevCards];
             remoteOnlyCards.forEach(rc => {
-              console.log('Adding remote card:', rc.id, rc.title);
               newCards.push(rc);
             });
             return newCards;
@@ -673,19 +636,14 @@ export default function App() {
         
         // 3. 変更されたカードをアップロード
         if (syncMetadata.localChanges.length > 0) {
-          console.log('Uploading changed cards:', syncMetadata.localChanges);
-          
           const changedCards = cards.filter(c => 
             syncMetadata.localChanges.includes(c.id)
           );
-          
-          console.log('Changed cards to sync:', changedCards.length);
           
           // 削除されたカードは論理削除としてアップロード
           const deletedCards = changedCards.filter(c => c.isDeleted);
           for (const card of deletedCards) {
             try {
-              console.log('Uploading deleted card to Dropbox:', card.id, card.title);
               await deleteCardFromDropbox(card); // 論理削除
             } catch (error) {
               console.error(`Failed to upload deleted card ${card.id}:`, error);
@@ -699,7 +657,6 @@ export default function App() {
           
           for (const card of activeCards) {
             try {
-              console.log('Uploading changed card:', card.id, card.title);
               await uploadCardToDropbox(card);
             } catch (error) {
               console.error(`Failed to upload card ${card.id}:`, error);
@@ -809,105 +766,111 @@ export default function App() {
       setActiveSideCardId(null);
   };
 
-const handleSaveCard = (cardData: Partial<Card>, shouldClose = true) => {
-    console.log('=== handleSaveCard called ===');
-    console.log('cardData:', cardData);
-    
-    const currentId = cardData.id; 
-    if (!currentId) {
-      console.log('No ID, returning');
-      return;
-    }
+  const handleSaveCard = (cardData: Partial<Card>, shouldClose = true) => {
+      const currentId = cardData.id; 
+      if (!currentId) return;
 
-    // タイトルの重複チェック（新規作成時とタイトル変更時）
-    if (cardData.title && cardData.title.trim()) {
-        const titleExists = cards.some(c => 
-            c.title === cardData.title && 
-            c.id !== currentId && 
-            !c.isDeleted
-        );
+      // タイトルの重複チェック（新規作成時とタイトル変更時）
+      if (cardData.title && cardData.title.trim()) {
+          const titleExists = cards.some(c => 
+              c.title === cardData.title && 
+              c.id !== currentId && 
+              !c.isDeleted
+          );
 
-        if (titleExists) {
-            alert('同じタイトルのカードが既に存在します。別のタイトルを使用してください。');
-            return;
-        }
-    }
+          if (titleExists) {
+              alert('同じタイトルのカードが既に存在します。別のタイトルを使用してください。');
+              return;
+          }
+      }
 
-    let actualSavedId = currentId;
+      let actualSavedId = currentId;
 
-    if (phantomCards.has(currentId)) {
-        console.log('Phantom card detected');
-        // ... 既存のコード
-    } else {
-        console.log('Existing card update');
-        const oldCard = cards.find(c => c.id === currentId);
-        
-        if (!oldCard) {
-          console.log('Old card not found!');
-          return;
-        }
-        
-        // 🆕 追加: 実際に変更があったかチェック
-        console.log('=== Comparing with existing card ===');
-        console.log('Old card:', {
-          title: oldCard.title,
-          body: oldCard.body?.substring(0, 50),
-          type: oldCard.type,
-          stacks: oldCard.stacks,
-          dueDate: oldCard.dueDate,
-          completed: oldCard.completed,
-          isPinned: oldCard.isPinned
-        });
-        console.log('New data:', {
-          title: cardData.title,
-          body: cardData.body?.substring(0, 50),
-          type: cardData.type,
-          stacks: cardData.stacks,
-          dueDate: cardData.dueDate,
-          completed: cardData.completed,
-          isPinned: cardData.isPinned
-        });
-        
-        const hasChanges = 
-            oldCard.title !== cardData.title ||
-            oldCard.body !== cardData.body ||
-            oldCard.type !== cardData.type ||
-            oldCard.dueDate !== cardData.dueDate ||
-            oldCard.completed !== cardData.completed ||
-            oldCard.isPinned !== cardData.isPinned ||
-            JSON.stringify(oldCard.stacks?.sort()) !== JSON.stringify(cardData.stacks?.sort());
-        
-        console.log('Has changes:', hasChanges);
-        
-        // 変更がない場合は更新しない
-        if (!hasChanges) {
-            console.log('✓ No changes detected in handleSaveCard, skipping update');
-            return;
-        }
-        
-        console.log('✗ Changes detected, updating card');
-        
-        const titleChanged = cardData.title && oldCard.title !== cardData.title;
+      if (phantomCards.has(currentId)) {
+          const existingIndex = cards.findIndex(c => c.id === currentId);
 
-        if (titleChanged) {
-            console.log('Title changed, updating backlinks');
-            // ... 既存のタイトル変更処理
-        } else {
-            setCards(cards.map(c => c.id === currentId ? { 
-                ...c, 
-                ...cardData, 
-                updatedAt: Date.now() 
-            } as Card : c));
-        }
-    }
-    
-    // localChanges への追加
-    console.log('Adding to localChanges:', actualSavedId);
-    setSyncMetadata(prev => ({
-      ...prev,
-      localChanges: [...new Set([...prev.localChanges, actualSavedId])]
-    }));
-};
+          if (existingIndex === -1) {
+              const newId = generateId();
+              actualSavedId = newId;
+              const newCard: Card = {
+                  id: newId,
+                  type: cardData.type || CardType.Record,
+                  title: cardData.title || '無題',
+                  body: cardData.body || '',
+                  createdAt: cardData.createdAt || Date.now(),
+                  updatedAt: Date.now(),
+                  dueDate: cardData.dueDate,
+                  completed: false,
+                  stacks: cardData.stacks || [],
+                  isDeleted: false,
+                  isPinned: cardData.isPinned || false
+              };
+              setCards([newCard, ...cards]);
+
+              if (activeModalCardId === currentId) setActiveModalCardId(newId);
+              if (activeSideCardId === currentId) setActiveSideCardId(newId);
+              
+              setPhantomCards(prev => { const n = new Map(prev); n.delete(currentId); return n; });
+          }
+      } else {
+          const oldCard = cards.find(c => c.id === currentId);
+          
+          if (oldCard) {
+              const hasChanges = 
+                  oldCard.title !== cardData.title ||
+                  oldCard.body !== cardData.body ||
+                  oldCard.type !== cardData.type ||
+                  oldCard.dueDate !== cardData.dueDate ||
+                  oldCard.completed !== cardData.completed ||
+                  oldCard.isPinned !== cardData.isPinned ||
+                  JSON.stringify(oldCard.stacks?.sort()) !== JSON.stringify(cardData.stacks?.sort());
+              
+              if (!hasChanges) {
+                  return;
+              }
+          }
+          
+          const titleChanged = oldCard && cardData.title && oldCard.title !== cardData.title;
+
+          if (titleChanged && oldCard) {
+              const escapedOldTitle = oldCard.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const oldTitleRegex = new RegExp(`\\[\\[${escapedOldTitle}\\]\\]`, 'g');
+              const newLink = `[[${cardData.title}]]`;
+
+              if (isDropboxConnected) {
+                  renameCardInDropbox(oldCard, cardData.title).catch(err => {
+                      console.error('Failed to rename file in Dropbox:', err);
+                  });
+              }
+
+              setCards(cards.map(c => {
+                  if (c.id === currentId) {
+                      return { ...c, ...cardData, updatedAt: Date.now() } as Card;
+                  }
+                  if (c.body.match(oldTitleRegex)) {
+                      return {
+                          ...c,
+                          body: c.body.replace(oldTitleRegex, newLink),
+                          updatedAt: Date.now()
+                      };
+                  }
+                  return c;
+              }));
+          } else {
+              setCards(cards.map(c => c.id === currentId ? { 
+                  ...c, 
+                  ...cardData, 
+                  updatedAt: Date.now() 
+              } as Card : c));
+          }
+      }
+      
+      // 変更があった場合のみ localChanges に追加
+      setSyncMetadata(prev => ({
+        ...prev,
+        localChanges: [...new Set([...prev.localChanges, actualSavedId])]
+      }));
+  };
 
   const handleDeleteCard = (id: string) => {
     setCards(cards.map(c => c.id === id ? { ...c, isDeleted: true, deletedAt: Date.now(), updatedAt: Date.now() } : c));

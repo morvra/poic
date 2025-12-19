@@ -227,22 +227,14 @@ export const Editor: React.FC<EditorProps> = ({
       };
   }, [title, body, type, dueDate, stacks, createdAt, completed, isPinned]);
 
-const handleAutoSave = () => {
-    console.log('=== handleAutoSave called ===');
-    console.log('title:', title);
-    console.log('body:', body);
-    
-    if (!title.trim() && !body.trim()) {
-      console.log('Skipping: empty title and body');
-      return;
-    }
+  const handleAutoSave = () => {
+    if (!title.trim() && !body.trim()) return;
     
     const isNewCard = !initialCard?.id || 
                       initialCard.id.startsWith('new-') || 
                       initialCard.id.startsWith('phantom-');
     
     if (isNewCard) {
-      console.log('Skipping auto-save for new card');
       return;
     }
     
@@ -254,20 +246,10 @@ const handleAutoSave = () => {
             dueTimestamp = new Date(dueDate).getTime();
         }
         
-        // 🆕 isPinned の正規化関数
         const normalizePin = (val: number | boolean | undefined) => {
             if (val === undefined || val === false) return false;
             return val;
         };
-        
-        console.log('=== Change Detection ===');
-        console.log('Title changed:', initialCard.title !== title);
-        console.log('Body changed:', initialCard.body !== body);
-        console.log('Type changed:', initialCard.type !== type);
-        console.log('DueDate changed:', initialCard.dueDate !== dueTimestamp);
-        console.log('Completed changed:', (type === CardType.GTD && initialCard.completed !== completed));
-        console.log('isPinned changed:', normalizePin(initialCard.isPinned), '!==', normalizePin(isPinned));
-        console.log('Stacks changed:', JSON.stringify(initialCard.stacks?.sort()) !== JSON.stringify(stackList.sort()));
         
         const hasChanges = 
             initialCard.title !== title ||
@@ -278,14 +260,9 @@ const handleAutoSave = () => {
             normalizePin(initialCard.isPinned) !== normalizePin(isPinned) ||
             JSON.stringify(initialCard.stacks?.sort()) !== JSON.stringify(stackList.sort());
         
-        console.log('Has changes:', hasChanges);
-        
         if (!hasChanges) {
-            console.log('✓ No changes detected in auto-save, skipping update');
             return;
         }
-        
-        console.log('✗ Changes detected, proceeding with save');
     }
     
     let dueTimestamp: number | undefined = undefined;
