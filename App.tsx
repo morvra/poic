@@ -1108,7 +1108,7 @@ return (
                           </div>
                       </>
                   ) : (
-                      // 通常モード時のヘッダー
+                      // 通常モード時のヘッダー（既存のコード）
                       <>
                           <div className="flex items-center gap-3 flex-1">
                               <button 
@@ -1154,32 +1154,7 @@ return (
                                           クリア
                                       </button>
                                   )}
-                              </div>
-                              
-                              {/* 並び順選択ドロップダウン（GTDモード以外で表示） */}
-                              {viewMode !== 'GTD' && (
-                                  <div className="hidden sm:flex items-center gap-2 text-xs text-stone-500 bg-white px-3 py-1.5 rounded-full border border-stone-200 shadow-sm">
-                                      <Filter size={12} />
-                                      <select
-                                          value={sortOrder}
-                                          onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-                                          className="bg-transparent border-none focus:outline-none text-stone-600 cursor-pointer"
-                                      >
-                                          <option value="created-desc">作成日: 新しい順</option>
-                                          <option value="created-asc">作成日: 古い順</option>
-                                          <option value="updated-desc">更新日: 新しい順</option>
-                                          <option value="updated-asc">更新日: 古い順</option>
-                                      </select>
-                                  </div>
-                              )}
-                              
-                              {/* GTDモード用の並び順表示 */}
-                              {viewMode === 'GTD' && (
-                                  <div className="hidden sm:flex items-center gap-2 text-xs text-stone-500 bg-white px-3 py-1.5 rounded-full border border-stone-200 shadow-sm">
-                                      <Filter size={12} />
-                                      <span>並び順: 期限</span>
-                                  </div>
-                              )}
+                              </div>                              
                           </div>
                           
                           <div className="ml-4 flex items-center gap-2">
@@ -1214,8 +1189,37 @@ return (
                   <div className="px-2 sm:px-6 w-full max-w-[1920px] mx-auto pb-20 pt-4">
                       <div className="mb-4 flex items-center justify-between pl-2 border-l-4 border-stone-400">
                           <h2 className="text-xl font-serif font-bold text-stone-700 ml-3">{viewMode === 'All' && (searchQuery ? `検索: "${searchQuery}"` : 'Dock (全カード)')}{viewMode === 'Stack' && `タグ: ${activeStack}`}{viewMode === 'Type' && `分類: ${activeType}`}{viewMode === 'GTD' && 'アクション'}</h2>
-                          <div className="flex items-center gap-2"><button onClick={handleExportOPML} title="OPMLをコピー" className="flex items-center gap-1 text-xs font-mono text-stone-500 hover:text-stone-800 bg-stone-300/30 hover:bg-stone-300/60 px-2 py-1 rounded transition-colors"><Copy size={12} /><span className="hidden sm:inline">OPML</span></button><span className="text-xs font-mono text-stone-500 bg-stone-300/50 px-2 py-1 rounded">{filteredCards.length} cards</span></div>
-                      </div>
+                          <div className="flex items-center gap-2">
+                              {/* 並び順ドロップダウン（GTDモード以外） */}
+                              {viewMode !== 'GTD' && (
+                                  <select
+                                      value={sortOrder}
+                                      onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                                      className="text-xs font-mono text-stone-600 bg-stone-300/30 hover:bg-stone-300/60 px-2 py-1 rounded border-none focus:outline-none focus:ring-2 focus:ring-stone-400 transition-colors cursor-pointer"
+                                      title="並び順を選択"
+                                  >
+                                      <option value="created-desc">作成↓</option>
+                                      <option value="created-asc">作成↑</option>
+                                      <option value="updated-desc">更新↓</option>
+                                      <option value="updated-asc">更新↑</option>
+                                  </select>
+                              )}
+                              
+                              {/* GTDモード用の並び順表示 */}
+                              {viewMode === 'GTD' && (
+                                  <span className="text-xs font-mono text-stone-500 bg-stone-300/30 px-2 py-1 rounded flex items-center gap-1">
+                                      <Filter size={12} />
+                                      <span className="hidden sm:inline">期限順</span>
+                                  </span>
+                              )}
+                              
+                              <button onClick={handleExportOPML} title="OPMLをコピー" className="flex items-center gap-1 text-xs font-mono text-stone-500 hover:text-stone-800 bg-stone-300/30 hover:bg-stone-300/60 px-2 py-1 rounded transition-colors">
+                                  <Copy size={12} />
+                                  <span className="hidden sm:inline">OPML</span>
+                              </button>
+                              <span className="text-xs font-mono text-stone-500 bg-stone-300/50 px-2 py-1 rounded">{filteredCards.length} cards</span>
+                          </div>
+                    </div>
 
                       <div className={viewMode === 'GTD' ? '' : gridClasses}>
                           {pinnedCards.length > 0 && (<><div className="col-span-full flex items-center gap-2 mb-2"><Pin size={16} className="text-stone-400" /><span className="text-xs font-bold text-stone-400 uppercase tracking-wider">Pinned</span><div className="h-px flex-1 bg-stone-300/50"></div></div>{pinnedCards.map(card => (<CardItem key={card.id} domId={`card-${card.id}`} card={card} dateFormat={dateFormat} onClick={openEditCardEditor} onLinkClick={handleLinkClick} onToggleComplete={toggleGTDComplete} onStackClick={(s) => handleViewChange('Stack', s)} onTogglePin={togglePin} isSelectionMode={isSelectionMode} isSelected={selectedCardIds.has(card.id)} onSelect={handleSelectCard} />))}<div className="col-span-full h-4"></div></>)}
