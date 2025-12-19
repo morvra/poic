@@ -1018,110 +1018,146 @@ return (
       <div className="flex-1 flex overflow-hidden relative">
           {/* 左側のメイン領域 */}
           <div className={`flex flex-col overflow-hidden transition-all duration-200 ${activeSideCard ? 'flex-1' : 'w-full'} relative`}>
-              {/* ヘッダー - 左側領域専用 - z-indexを10に設定 */}
+              {/* ヘッダー - 左側領域専用 */}
               <header className={`flex-shrink-0 bg-stone-200/95 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm z-10 border-b border-stone-300/30 ${activeModalCard ? 'blur-sm pointer-events-none select-none' : ''}`}>
-                  <div className="flex items-center gap-3 flex-1">
-                      <button 
-                          onClick={toggleSidebar} 
-                          className="text-stone-600 hover:bg-stone-300 p-2 rounded-md transition-colors"
-                      >
-                          <Menu size={20} />
-                      </button>
-                      
-                      <button 
-                          onClick={handleHome} 
-                          title="すべて表示" 
-                          className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"
-                      >
-                          <Home size={20} />
-                      </button>
-                      
-                      {isDropboxConnected && (
-                          <button 
-                              onClick={(e) => handleManualSync(e.shiftKey)} 
-                              disabled={isSyncing}
-                              title={isSyncing ? '同期中...' : '今すぐ同期 (Shift+クリックでフル同期)'}
-                              className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                              <RefreshCw size={20} className={isSyncing ? "animate-spin" : ""} />
-                          </button>
-                      )}
-                      
-                      <div className="relative flex-1 max-w-md">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
-                          <input 
-                              type="text" 
-                              placeholder="検索..." 
-                              className="w-full pl-9 pr-4 py-2 bg-white border border-stone-300/50 rounded-full text-sm focus:ring-2 focus:ring-stone-400 focus:border-stone-400 transition-all outline-none shadow-sm" 
-                              value={searchQuery} 
-                              onChange={(e) => setSearchQuery(e.target.value)} 
-                          />
-                          {searchQuery && (
+                  {isSelectionMode ? (
+                      // 複数選択モード時のヘッダー
+                      <>
+                          <div className="flex items-center gap-2 flex-shrink-0">
                               <button 
-                                  onClick={() => setSearchQuery('')} 
-                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs"
+                                  onClick={toggleSidebar} 
+                                  className="text-stone-600 hover:bg-stone-300 p-2 rounded-md transition-colors"
                               >
-                                  クリア
-                              </button>
-                          )}
-                      </div>
-                      
-                      {viewMode === 'GTD' && (
-                          <div className="hidden sm:flex items-center gap-2 text-xs text-stone-500 bg-white px-3 py-1.5 rounded-full border border-stone-200 shadow-sm">
-                              <Filter size={12} />
-                              <span>並び順: 期限</span>
-                          </div>
-                      )}
-                  </div>
-                  
-                  <div className="ml-4 flex items-center gap-2">
-                      <button 
-                          onClick={handleRandomCard} 
-                          title="ランダムにカードを表示" 
-                          className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"
-                      >
-                          <Shuffle size={20} />
-                      </button>
-                      
-                      <button 
-                          onClick={handleToggleSelection} 
-                          title={isSelectionMode ? "選択モードを終了" : "複数選択"} 
-                          className={`p-2 rounded-full transition-colors ${isSelectionMode ? 'bg-stone-800 text-white' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'}`}
-                      >
-                          <SelectIcon size={20} />
-                      </button>
-                      
-                      {isSelectionMode && (
-                          <button 
-                              onClick={handleSelectAll} 
-                              title="表示中のカードをすべて選択" 
-                              className={`p-2 rounded-full transition-colors ${filteredCards.length > 0 && filteredCards.every(c => selectedCardIds.has(c.id)) ? 'bg-blue-100 text-blue-600' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'}`}
-                          >
-                              <CheckCheck size={20} />
-                          </button>
-                      )}
-                      
-                      {isSelectionMode && selectedCardIds.size > 0 && (
-                          <>
-                              <button 
-                                  onClick={() => setShowBatchTagModal(true)} 
-                                  title="タグの管理" 
-                                  className="bg-stone-800 hover:bg-stone-900 text-white p-2 rounded-full shadow-lg transition-colors flex items-center gap-2"
-                              >
-                                  <Tag size={20} />
+                                  <Menu size={20} />
                               </button>
                               
                               <button 
-                                  onClick={handleClickDeleteSelected} 
-                                  title={`${selectedCardIds.size}枚のカードを削除`} 
-                                  className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full shadow-lg transition-colors flex items-center gap-2"
+                                  onClick={handleToggleSelection} 
+                                  className="text-stone-600 hover:bg-stone-300 px-3 py-2 rounded-md transition-colors flex items-center gap-1"
                               >
-                                  <Trash2 size={20} />
-                                  <span className="text-xs font-bold hidden sm:inline">{selectedCardIds.size}</span>
+                                  <X size={18} />
+                                  <span className="text-sm font-medium hidden sm:inline">キャンセル</span>
                               </button>
-                          </>
-                      )}
-                  </div>
+                              
+                              <span className="text-sm text-stone-600 font-medium ml-2">
+                                  {selectedCardIds.size}件
+                              </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                              <button 
+                                  onClick={handleSelectAll} 
+                                  title="全選択" 
+                                  className={`p-2 rounded-full transition-colors ${filteredCards.length > 0 && filteredCards.every(c => selectedCardIds.has(c.id)) ? 'bg-blue-100 text-blue-600' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-300/50'}`}
+                              >
+                                  <CheckCheck size={20} />
+                              </button>
+                              
+                              {selectedCardIds.size > 0 && (
+                                  <>
+                                      <button 
+                                          onClick={() => setShowBatchTagModal(true)} 
+                                          title="タグ管理" 
+                                          className="bg-stone-700 hover:bg-stone-800 text-white p-2 rounded-full transition-colors"
+                                      >
+                                          <Tag size={20} />
+                                      </button>
+                                      
+                                      <button 
+                                          onClick={handleExportOPML} 
+                                          title="OPML出力" 
+                                          className="bg-stone-700 hover:bg-stone-800 text-white p-2 rounded-full transition-colors"
+                                      >
+                                          <Copy size={20} />
+                                      </button>
+                                      
+                                      <button 
+                                          onClick={handleClickDeleteSelected} 
+                                          title={`${selectedCardIds.size}件削除`}
+                                          className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full transition-colors"
+                                      >
+                                          <Trash2 size={20} />
+                                      </button>
+                                  </>
+                              )}
+                          </div>
+                      </>
+                  ) : (
+                      // 通常モード時のヘッダー（既存のコード）
+                      <>
+                          <div className="flex items-center gap-3 flex-1">
+                              <button 
+                                  onClick={toggleSidebar} 
+                                  className="text-stone-600 hover:bg-stone-300 p-2 rounded-md transition-colors"
+                              >
+                                  <Menu size={20} />
+                              </button>
+                              
+                              <button 
+                                  onClick={handleHome} 
+                                  title="すべて表示" 
+                                  className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"
+                              >
+                                  <Home size={20} />
+                              </button>
+                              
+                              {isDropboxConnected && (
+                                  <button 
+                                      onClick={(e) => handleManualSync(e.shiftKey)} 
+                                      disabled={isSyncing}
+                                      title={isSyncing ? '同期中...' : '今すぐ同期 (Shift+クリックでフル同期)'}
+                                      className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                      <RefreshCw size={20} className={isSyncing ? "animate-spin" : ""} />
+                                  </button>
+                              )}
+                              
+                              <div className="relative flex-1 max-w-md">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
+                                  <input 
+                                      type="text" 
+                                      placeholder="検索..." 
+                                      className="w-full pl-9 pr-4 py-2 bg-white border border-stone-300/50 rounded-full text-sm focus:ring-2 focus:ring-stone-400 focus:border-stone-400 transition-all outline-none shadow-sm" 
+                                      value={searchQuery} 
+                                      onChange={(e) => setSearchQuery(e.target.value)} 
+                                  />
+                                  {searchQuery && (
+                                      <button 
+                                          onClick={() => setSearchQuery('')} 
+                                          className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs"
+                                      >
+                                          クリア
+                                      </button>
+                                  )}
+                              </div>
+                              
+                              {viewMode === 'GTD' && (
+                                  <div className="hidden sm:flex items-center gap-2 text-xs text-stone-500 bg-white px-3 py-1.5 rounded-full border border-stone-200 shadow-sm">
+                                      <Filter size={12} />
+                                      <span>並び順: 期限</span>
+                                  </div>
+                              )}
+                          </div>
+                          
+                          <div className="ml-4 flex items-center gap-2">
+                              <button 
+                                  onClick={handleRandomCard} 
+                                  title="ランダムにカードを表示" 
+                                  className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"
+                              >
+                                  <Shuffle size={20} />
+                              </button>
+                              
+                              <button 
+                                  onClick={handleToggleSelection} 
+                                  title="複数選択" 
+                                  className="text-stone-500 hover:text-stone-800 hover:bg-stone-300/50 p-2 rounded-full transition-colors"
+                              >
+                                  <SelectIcon size={20} />
+                              </button>
+                          </div>
+                      </>
+                  )}
               </header>
               
               {/* メインスクロールエリア */}
