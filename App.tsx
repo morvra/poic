@@ -754,6 +754,13 @@ export default function App() {
 
   const handleCloseModal = () => {
       if (activeModalCardId && phantomCards.has(activeModalCardId)) {
+          const phantomCard = phantomCards.get(activeModalCardId);
+          
+          // タイトルまたは本文がある場合は保存
+          if (phantomCard && (phantomCard.title?.trim() || phantomCard.body?.trim())) {
+              handleSaveCard(phantomCard, false);
+          }
+          
           setPhantomCards(prev => { const n = new Map(prev); n.delete(activeModalCardId); return n; });
       }
       setActiveModalCardId(null);
@@ -761,6 +768,13 @@ export default function App() {
 
   const handleCloseSide = () => {
       if (activeSideCardId && phantomCards.has(activeSideCardId)) {
+          const phantomCard = phantomCards.get(activeSideCardId);
+          
+          // タイトルまたは本文がある場合は保存
+          if (phantomCard && (phantomCard.title?.trim() || phantomCard.body?.trim())) {
+              handleSaveCard(phantomCard, false);
+          }
+          
           setPhantomCards(prev => { const n = new Map(prev); n.delete(activeSideCardId); return n; });
       }
       setActiveSideCardId(null);

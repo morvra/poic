@@ -365,7 +365,7 @@ export const Editor: React.FC<EditorProps> = ({
           return;
       }
       if (e.key === 'Escape' && !showDeleteConfirm) {
-        onCancel();
+        handleClose();
       } else if (e.key === 'Escape' && showDeleteConfirm) {
           setShowDeleteConfirm(false);
       }
@@ -513,6 +513,38 @@ export const Editor: React.FC<EditorProps> = ({
       }
   };
 
+  const handleClose = () => {
+    // 新規カードまたはPhantomカードで、内容がある場合は保存を試みる
+    const isNewOrPhantom = !initialCard?.id || 
+                           initialCard.id.startsWith('new-') || 
+                           initialCard.id.startsWith('phantom-');
+    
+    if (isNewOrPhantom && (title.trim() || body.trim())) {
+      // 保存してから閉じる
+      let dueTimestamp: number | undefined = undefined;
+      if (type === CardType.GTD && dueDate) {
+        dueTimestamp = new Date(dueDate).getTime();
+      }
+      const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      const createdTimestamp = new Date(createdAt).getTime();
+      
+      onSave({
+        id: initialCard?.id,
+        title: title || '無題',
+        body,
+        type,
+        dueDate: dueTimestamp,
+        stacks: stackList,
+        createdAt: createdTimestamp,
+        completed: type === CardType.GTD ? completed : false,
+        isPinned
+      }, true); // shouldClose = true
+    } else {
+      // 内容がない場合はそのまま閉じる
+      onCancel();
+    }
+  };
+
   const TYPE_COLORS_BG = {
     [CardType.Record]: 'bg-blue-100 text-blue-800',
     [CardType.Discovery]: 'bg-red-100 text-red-800',
@@ -575,7 +607,7 @@ export const Editor: React.FC<EditorProps> = ({
            >
               <Pin size={20} fill={isPinned ? "currentColor" : "none"} />
            </button>
-          <button onClick={onCancel} className="text-stone-400 hover:text-stone-600 p-2 rounded-full hover:bg-stone-100 transition-colors">
+          <button onClick={handleClose} className="text-stone-400 hover:text-stone-600 p-2 rounded-full hover:bg-stone-100 transition-colors">
               <X size={24} />
           </button>
       </div>
