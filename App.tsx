@@ -718,33 +718,66 @@ export default function App() {
   };
 
   const handleLinkClick = (term: string, e?: React.MouseEvent) => {
-    if (term.startsWith('#')) {
-        setSearchQuery(term); setViewMode('All'); setActiveStack(null); setIsSidebarOpen(false); setActiveModalCardId(null); return;
-    }
+      // リンククリック前に、現在のモーダルカードを保存
+      if (activeModalCardId && (
+          activeModalCardId.startsWith('new-') || 
+          activeModalCardId.startsWith('phantom-')
+      )) {
+          const currentCard = phantomCards.get(activeModalCardId);
+          // 本文がある場合のみ保存
+          if (currentCard && currentCard.body?.trim()) {
+              handleSaveCard(currentCard, false);
+              // phantomCardsから削除（保存済みなので）
+              setPhantomCards(prev => {
+                  const n = new Map(prev);
+                  n.delete(activeModalCardId);
+                  return n;
+              });
+          }
+      }
 
-    const targetCard = cards.find(c => !c.isDeleted && c.title.toLowerCase() === term.toLowerCase());
-    let targetId = targetCard?.id;
-    
-    if (!targetId) {
-        targetId = `phantom-${Date.now()}`;
-        setPhantomCards(prev => new Map(prev).set(targetId!, {
-            id: targetId, title: term, type: CardType.Record, body: '', createdAt: Date.now(), updatedAt: Date.now(), stacks: [], isDeleted: false, isPinned: false
-        }));
-    }
+      // ハッシュタグ処理
+      if (term.startsWith('#')) {
+          setSearchQuery(term); 
+          setViewMode('All'); 
+          setActiveStack(null); 
+          setIsSidebarOpen(false); 
+          setActiveModalCardId(null); 
+          return;
+      }
 
-    const isMultiOpen = e?.metaKey || e?.ctrlKey;
-    
-    if (isMultiOpen) {
-        setActiveSideCardId(targetId);
-    } else {
-        if (activeModalCardId) {
-            setActiveModalCardId(targetId);
-        } else if (activeSideCardId) {
-            setActiveSideCardId(targetId);
-        } else {
-            setActiveModalCardId(targetId);
-        }
-    }
+      // リンク先のカードを探す
+      const targetCard = cards.find(c => !c.isDeleted && c.title.toLowerCase() === term.toLowerCase());
+      let targetId = targetCard?.id;
+      
+      if (!targetId) {
+          targetId = `phantom-${Date.now()}`;
+          setPhantomCards(prev => new Map(prev).set(targetId!, {
+              id: targetId, 
+              title: term, 
+              type: CardType.Record, 
+              body: '', 
+              createdAt: Date.now(), 
+              updatedAt: Date.now(), 
+              stacks: [], 
+              isDeleted: false, 
+              isPinned: false
+          }));
+      }
+
+      const isMultiOpen = e?.metaKey || e?.ctrlKey;
+      
+      if (isMultiOpen) {
+          setActiveSideCardId(targetId);
+      } else {
+          if (activeModalCardId) {
+              setActiveModalCardId(targetId);
+          } else if (activeSideCardId) {
+              setActiveSideCardId(targetId);
+          } else {
+              setActiveModalCardId(targetId);
+          }
+      }
   };
 
   const handleMoveToSide = (id: string) => {
