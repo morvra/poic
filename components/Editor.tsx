@@ -313,6 +313,43 @@ export const Editor: React.FC<EditorProps> = ({
       }
   }, [isEditingBody]);
 
+  // カードが切り替わる前に保存
+  useEffect(() => {
+      return () => {
+          // アンマウント時（カード切り替え時）に保存を試みる
+          const isNewOrPhantom = !initialCard?.id || 
+                                 initialCard.id.startsWith('new-') || 
+                                 initialCard.id.startsWith('phantom-');
+          
+          if (isNewOrPhantom && (title.trim() || body.trim())) {
+              // クリーンアップ関数内なので、直接onSaveを呼ぶのではなく
+              // saveTimeoutをクリアして即座に保存
+              if (saveTimeoutRef.current) {
+                  clearTimeout(saveTimeoutRef.current);
+              }
+              
+              let dueTimestamp: number | undefined = undefined;
+              if (type === CardType.GTD && dueDate) {
+                  dueTimestamp = new Date(dueDate).getTime();
+              }
+              const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
+              const createdTimestamp = new Date(createdAt).getTime();
+              
+              onSave({
+                  id: initialCard?.id,
+                  title: title || '無題',
+                  body,
+                  type,
+                  dueDate: dueTimestamp,
+                  stacks: stackList,
+                  createdAt: createdTimestamp,
+                  completed: type === CardType.GTD ? completed : false,
+                  isPinned
+              }, false);
+          }
+      };
+  }, [initialCard?.id]); // initialCard?.id が変わる時に発火
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!containerRef.current?.contains(document.activeElement)) {

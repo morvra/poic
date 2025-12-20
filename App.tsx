@@ -738,6 +738,7 @@ export default function App() {
         setActiveSideCardId(targetId);
     } else {
         if (activeModalCardId) {
+            // ref経由で保存を試みる（次のセクションで実装）
             setActiveModalCardId(targetId);
         } else if (activeSideCardId) {
             setActiveSideCardId(targetId);
