@@ -150,7 +150,6 @@ export const Editor: React.FC<EditorProps> = ({
     });
   }, [backlinks, allCards]);
 
-  // ... (既存のuseEffectとhandler関数は変更なし) ...
   useEffect(() => {
     if (containerRef.current) {
         containerRef.current.scrollTop = 0;
@@ -312,87 +311,6 @@ export const Editor: React.FC<EditorProps> = ({
           }
       }
   }, [isEditingBody]);
-
-// カードが切り替わる前に保存
-  useEffect(() => {
-      return () => {
-          // アンマウント時（カード切り替え時）に保存を試みる
-          if (!initialCard?.id) return;
-          
-          const isNewOrPhantom = initialCard.id.startsWith('new-') || 
-                                 initialCard.id.startsWith('phantom-');
-          
-          // 新規/Phantomカードの場合: 内容があれば無条件で保存
-          if (isNewOrPhantom && (title.trim() || body.trim())) {
-              if (saveTimeoutRef.current) {
-                  clearTimeout(saveTimeoutRef.current);
-              }
-              
-              let dueTimestamp: number | undefined = undefined;
-              if (type === CardType.GTD && dueDate) {
-                  dueTimestamp = new Date(dueDate).getTime();
-              }
-              const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
-              const createdTimestamp = new Date(createdAt).getTime();
-              
-              onSave({
-                  id: initialCard?.id,
-                  title: title || '無題',
-                  body,
-                  type,
-                  dueDate: dueTimestamp,
-                  stacks: stackList,
-                  createdAt: createdTimestamp,
-                  completed: type === CardType.GTD ? completed : false,
-                  isPinned
-              }, false);
-              return;
-          }
-          
-          // 既存カードの場合: 変更があれば保存
-          if (!isNewOrPhantom && initialCard) {
-              const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
-              let dueTimestamp: number | undefined = undefined;
-              if (type === CardType.GTD && dueDate) {
-                  dueTimestamp = new Date(dueDate).getTime();
-              }
-              
-              const normalizePin = (val: number | boolean | undefined) => {
-                  if (val === undefined || val === false) return false;
-                  return val;
-              };
-              
-              const hasChanges = 
-                  initialCard.title !== title ||
-                  initialCard.body !== body ||
-                  initialCard.type !== type ||
-                  initialCard.dueDate !== dueTimestamp ||
-                  (type === CardType.GTD && initialCard.completed !== completed) ||
-                  normalizePin(initialCard.isPinned) !== normalizePin(isPinned) ||
-                  JSON.stringify(initialCard.stacks?.sort()) !== JSON.stringify(stackList.sort());
-              
-              if (hasChanges) {
-                  if (saveTimeoutRef.current) {
-                      clearTimeout(saveTimeoutRef.current);
-                  }
-                  
-                  const createdTimestamp = new Date(createdAt).getTime();
-                  
-                  onSave({
-                      id: initialCard?.id,
-                      title,
-                      body,
-                      type,
-                      dueDate: dueTimestamp,
-                      stacks: stackList,
-                      createdAt: createdTimestamp,
-                      completed: type === CardType.GTD ? completed : false,
-                      isPinned
-                  }, false);
-              }
-          }
-      };
-  }, [initialCard?.id]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
