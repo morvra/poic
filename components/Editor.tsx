@@ -513,34 +513,61 @@ export const Editor: React.FC<EditorProps> = ({
   };
 
   const handleClose = () => {
-    // 新規カードまたはPhantomカードで、内容がある場合は保存を試みる
-    const isNewOrPhantom = !initialCard?.id || 
-                           initialCard.id.startsWith('new-') || 
-                           initialCard.id.startsWith('phantom-');
+    const isNewCard = !initialCard?.id || initialCard.id.startsWith('new-');
+    const isPhantom = initialCard?.id?.startsWith('phantom-');
     
-    if (isNewOrPhantom && (title.trim() || body.trim())) {
-      // 保存してから閉じる
-      let dueTimestamp: number | undefined = undefined;
-      if (type === CardType.GTD && dueDate) {
-        dueTimestamp = new Date(dueDate).getTime();
-      }
-      const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
-      const createdTimestamp = new Date(createdAt).getTime();
-      
-      onSave({
-        id: initialCard?.id,
-        title: title || '無題',
-        body,
-        type,
-        dueDate: dueTimestamp,
-        stacks: stackList,
-        createdAt: createdTimestamp,
-        completed: type === CardType.GTD ? completed : false,
-        isPinned
-      }, true); // shouldClose = true
+    if (isPhantom) {
+        // phantom カードの場合は本文がある場合のみ保存
+        if (body.trim()) {
+        let dueTimestamp: number | undefined = undefined;
+        if (type === CardType.GTD && dueDate) {
+            dueTimestamp = new Date(dueDate).getTime();
+        }
+        const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        const createdTimestamp = new Date(createdAt).getTime();
+        
+        onSave({
+            id: initialCard?.id,
+            title: title.trim() || '無題',
+            body,
+            type,
+            dueDate: dueTimestamp,
+            stacks: stackList,
+            createdAt: createdTimestamp,
+            completed: type === CardType.GTD ? completed : false,
+            isPinned
+        }, true);
+        } else {
+        // 本文がない場合は保存せずに閉じる
+        onCancel();
+        }
+    } else if (isNewCard) {
+        // 新規カードの場合はタイトルまたは本文があれば保存
+        if (title.trim() || body.trim()) {
+        let dueTimestamp: number | undefined = undefined;
+        if (type === CardType.GTD && dueDate) {
+            dueTimestamp = new Date(dueDate).getTime();
+        }
+        const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        const createdTimestamp = new Date(createdAt).getTime();
+        
+        onSave({
+            id: initialCard?.id,
+            title: title.trim() || '無題',
+            body,
+            type,
+            dueDate: dueTimestamp,
+            stacks: stackList,
+            createdAt: createdTimestamp,
+            completed: type === CardType.GTD ? completed : false,
+            isPinned
+        }, true);
+        } else {
+        onCancel();
+        }
     } else {
-      // 内容がない場合はそのまま閉じる
-      onCancel();
+        // 既存カードの編集完了（自動保存済み）
+        onCancel();
     }
   };
 

@@ -756,33 +756,41 @@ export default function App() {
       if (activeModalCardId && phantomCards.has(activeModalCardId)) {
           const phantomCard = phantomCards.get(activeModalCardId);
           
-          // タイトルまたは本文がある場合は保存
-          if (phantomCard && (phantomCard.title?.trim() || phantomCard.body?.trim())) {
+          // Phantomは本文がある場合のみ保存する
+          if (phantomCard && phantomCard.body?.trim()) {
               handleSaveCard(phantomCard, false);
           }
           
+          // phantomCardsから削除
           setPhantomCards(prev => { const n = new Map(prev); n.delete(activeModalCardId); return n; });
       }
       setActiveModalCardId(null);
   };
 
   const handleCloseSide = () => {
-      if (activeSideCardId && phantomCards.has(activeSideCardId)) {
-          const phantomCard = phantomCards.get(activeSideCardId);
-          
-          // タイトルまたは本文がある場合は保存
-          if (phantomCard && (phantomCard.title?.trim() || phantomCard.body?.trim())) {
-              handleSaveCard(phantomCard, false);
-          }
-          
-          setPhantomCards(prev => { const n = new Map(prev); n.delete(activeSideCardId); return n; });
-      }
-      setActiveSideCardId(null);
+    if (activeSideCardId && phantomCards.has(activeSideCardId)) {
+        const phantomCard = phantomCards.get(activeSideCardId);
+        
+        // 本文がある場合のみ保存する
+        if (phantomCard && phantomCard.body?.trim()) {
+            handleSaveCard(phantomCard, false);
+        }
+        
+        setPhantomCards(prev => { const n = new Map(prev); n.delete(activeSideCardId); return n; });
+    }
+    setActiveSideCardId(null);
   };
 
   const handleSaveCard = (cardData: Partial<Card>, shouldClose = true) => {
       const currentId = cardData.id; 
       if (!currentId) return;
+
+      // phantom カードで本文が空の場合は保存しない
+      const isPhantom = currentId.startsWith('phantom-');
+      if (isPhantom && !cardData.body?.trim()) {
+          console.log('Skipping save: phantom card with no body content');
+          return;
+      }
 
       // タイトルの重複チェック（新規作成時とタイトル変更時）
       if (cardData.title && cardData.title.trim()) {
@@ -814,17 +822,26 @@ export default function App() {
                   createdAt: cardData.createdAt || Date.now(),
                   updatedAt: Date.now(),
                   dueDate: cardData.dueDate,
-                  completed: false,
+                  completed: cardData.completed || false,
                   stacks: cardData.stacks || [],
                   isDeleted: false,
                   isPinned: cardData.isPinned || false
               };
-              setCards([newCard, ...cards]);
+              
+              // カードを追加
+              setCards(prevCards => [newCard, ...prevCards]);
 
+              // phantom から実際のカードに切り替え
               if (activeModalCardId === currentId) setActiveModalCardId(newId);
               if (activeSideCardId === currentId) setActiveSideCardId(newId);
               
               setPhantomCards(prev => { const n = new Map(prev); n.delete(currentId); return n; });
+              
+              // 同期メタデータに追加
+              setSyncMetadata(prev => ({
+                  ...prev,
+                  localChanges: [...new Set([...prev.localChanges, newId])]
+              }));
           }
       } else {
           const oldCard = cards.find(c => c.id === currentId);
@@ -877,13 +894,13 @@ export default function App() {
                   updatedAt: Date.now() 
               } as Card : c));
           }
+          
+          // 変更があった場合のみ localChanges に追加
+          setSyncMetadata(prev => ({
+              ...prev,
+              localChanges: [...new Set([...prev.localChanges, actualSavedId])]
+          }));
       }
-      
-      // 変更があった場合のみ localChanges に追加
-      setSyncMetadata(prev => ({
-        ...prev,
-        localChanges: [...new Set([...prev.localChanges, actualSavedId])]
-      }));
   };
 
   const handleDeleteCard = (id: string) => {
