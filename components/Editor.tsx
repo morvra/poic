@@ -313,17 +313,17 @@ export const Editor: React.FC<EditorProps> = ({
       }
   }, [isEditingBody]);
 
-  // カードが切り替わる前に保存
+// カードが切り替わる前に保存
   useEffect(() => {
       return () => {
           // アンマウント時（カード切り替え時）に保存を試みる
-          const isNewOrPhantom = !initialCard?.id || 
-                                 initialCard.id.startsWith('new-') || 
+          if (!initialCard?.id) return;
+          
+          const isNewOrPhantom = initialCard.id.startsWith('new-') || 
                                  initialCard.id.startsWith('phantom-');
           
+          // 新規/Phantomカードの場合: 内容があれば無条件で保存
           if (isNewOrPhantom && (title.trim() || body.trim())) {
-              // クリーンアップ関数内なので、直接onSaveを呼ぶのではなく
-              // saveTimeoutをクリアして即座に保存
               if (saveTimeoutRef.current) {
                   clearTimeout(saveTimeoutRef.current);
               }
@@ -346,9 +346,53 @@ export const Editor: React.FC<EditorProps> = ({
                   completed: type === CardType.GTD ? completed : false,
                   isPinned
               }, false);
+              return;
+          }
+          
+          // 既存カードの場合: 変更があれば保存
+          if (!isNewOrPhantom && initialCard) {
+              const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
+              let dueTimestamp: number | undefined = undefined;
+              if (type === CardType.GTD && dueDate) {
+                  dueTimestamp = new Date(dueDate).getTime();
+              }
+              
+              const normalizePin = (val: number | boolean | undefined) => {
+                  if (val === undefined || val === false) return false;
+                  return val;
+              };
+              
+              const hasChanges = 
+                  initialCard.title !== title ||
+                  initialCard.body !== body ||
+                  initialCard.type !== type ||
+                  initialCard.dueDate !== dueTimestamp ||
+                  (type === CardType.GTD && initialCard.completed !== completed) ||
+                  normalizePin(initialCard.isPinned) !== normalizePin(isPinned) ||
+                  JSON.stringify(initialCard.stacks?.sort()) !== JSON.stringify(stackList.sort());
+              
+              if (hasChanges) {
+                  if (saveTimeoutRef.current) {
+                      clearTimeout(saveTimeoutRef.current);
+                  }
+                  
+                  const createdTimestamp = new Date(createdAt).getTime();
+                  
+                  onSave({
+                      id: initialCard?.id,
+                      title,
+                      body,
+                      type,
+                      dueDate: dueTimestamp,
+                      stacks: stackList,
+                      createdAt: createdTimestamp,
+                      completed: type === CardType.GTD ? completed : false,
+                      isPinned
+                  }, false);
+              }
           }
       };
-  }, [initialCard?.id]); // initialCard?.id が変わる時に発火
+  }, [initialCard?.id]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
