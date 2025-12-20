@@ -722,19 +722,6 @@ export default function App() {
         setSearchQuery(term); setViewMode('All'); setActiveStack(null); setIsSidebarOpen(false); setActiveModalCardId(null); return;
     }
 
-    // 現在のモーダルカードを保存してから切り替え
-    if (activeModalCardId) {
-        const currentCard = getCardData(activeModalCardId);
-        const isNewOrPhantom = activeModalCardId.startsWith('new-') || 
-                               activeModalCardId.startsWith('phantom-') ||
-                               phantomCards.has(activeModalCardId);
-        
-        // 新規またはPhantomカードで内容がある場合は保存
-        if (isNewOrPhantom && currentCard && (currentCard.title?.trim() || currentCard.body?.trim())) {
-            handleSaveCard(currentCard, false);
-        }
-    }
-
     const targetCard = cards.find(c => !c.isDeleted && c.title.toLowerCase() === term.toLowerCase());
     let targetId = targetCard?.id;
     
