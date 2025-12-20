@@ -84,7 +84,6 @@ export default function App() {
   const [batchTagInput, setBatchTagInput] = useState('');
 
   // Editor State
-  const editorRef = useRef<{ forceSave: () => void }>(null);
   const [activeModalCardId, setActiveModalCardId] = useState<string | null>(null);
   const [activeSideCardId, setActiveSideCardId] = useState<string | null>(null);
   
@@ -719,69 +718,33 @@ export default function App() {
   };
 
   const handleLinkClick = (term: string, e?: React.MouseEvent) => {
-      // リンククリック前に、現在のモーダルカードが新規/Phantomなら保存
-      if (activeModalCardId && (
-          activeModalCardId.startsWith('new-') || 
-          activeModalCardId.startsWith('phantom-')
-      )) {
-          // Editor の forceSave を呼び出す
-          if (editorRef.current) {
-              console.log('Forcing save before navigation...');
-              editorRef.current.forceSave();
-          }
-          
-          // phantomCardsから削除（もし存在すれば）
-          if (phantomCards.has(activeModalCardId)) {
-              setPhantomCards(prev => {
-                  const n = new Map(prev);
-                  n.delete(activeModalCardId);
-                  return n;
-              });
-          }
-      }
+    if (term.startsWith('#')) {
+        setSearchQuery(term); setViewMode('All'); setActiveStack(null); setIsSidebarOpen(false); setActiveModalCardId(null); return;
+    }
 
-      // ハッシュタグ処理
-      if (term.startsWith('#')) {
-          setSearchQuery(term); 
-          setViewMode('All'); 
-          setActiveStack(null); 
-          setIsSidebarOpen(false); 
-          setActiveModalCardId(null); 
-          return;
-      }
+    const targetCard = cards.find(c => !c.isDeleted && c.title.toLowerCase() === term.toLowerCase());
+    let targetId = targetCard?.id;
+    
+    if (!targetId) {
+        targetId = `phantom-${Date.now()}`;
+        setPhantomCards(prev => new Map(prev).set(targetId!, {
+            id: targetId, title: term, type: CardType.Record, body: '', createdAt: Date.now(), updatedAt: Date.now(), stacks: [], isDeleted: false, isPinned: false
+        }));
+    }
 
-      // リンク先のカードを探す
-      const targetCard = cards.find(c => !c.isDeleted && c.title.toLowerCase() === term.toLowerCase());
-      let targetId = targetCard?.id;
-      
-      if (!targetId) {
-          targetId = `phantom-${Date.now()}`;
-          setPhantomCards(prev => new Map(prev).set(targetId!, {
-              id: targetId, 
-              title: term, 
-              type: CardType.Record, 
-              body: '', 
-              createdAt: Date.now(), 
-              updatedAt: Date.now(), 
-              stacks: [], 
-              isDeleted: false, 
-              isPinned: false
-          }));
-      }
-
-      const isMultiOpen = e?.metaKey || e?.ctrlKey;
-      
-      if (isMultiOpen) {
-          setActiveSideCardId(targetId);
-      } else {
-          if (activeModalCardId) {
-              setActiveModalCardId(targetId);
-          } else if (activeSideCardId) {
-              setActiveSideCardId(targetId);
-          } else {
-              setActiveModalCardId(targetId);
-          }
-      }
+    const isMultiOpen = e?.metaKey || e?.ctrlKey;
+    
+    if (isMultiOpen) {
+        setActiveSideCardId(targetId);
+    } else {
+        if (activeModalCardId) {
+            setActiveModalCardId(targetId);
+        } else if (activeSideCardId) {
+            setActiveSideCardId(targetId);
+        } else {
+            setActiveModalCardId(targetId);
+        }
+    }
   };
 
   const handleMoveToSide = (id: string) => {
@@ -1052,7 +1015,6 @@ return (
           >
               <div className="w-full max-w-2xl h-auto max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl bg-paper pointer-events-auto">
                   <Editor 
-                      ref={editorRef}
                       initialCard={activeModalCard}
                       allTitles={allTitles}
                       allCards={cards}
