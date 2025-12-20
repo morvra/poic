@@ -738,7 +738,6 @@ export default function App() {
         setActiveSideCardId(targetId);
     } else {
         if (activeModalCardId) {
-            // ref経由で保存を試みる（次のセクションで実装）
             setActiveModalCardId(targetId);
         } else if (activeSideCardId) {
             setActiveSideCardId(targetId);
@@ -757,119 +756,33 @@ export default function App() {
       if (activeModalCardId && phantomCards.has(activeModalCardId)) {
           const phantomCard = phantomCards.get(activeModalCardId);
           
-          // 内容に関わらず handleSaveCard に任せる
-          if (phantomCard) {
-              handleSaveCard(phantomCard, true); // shouldClose = true
-          } else {
-              setPhantomCards(prev => { const n = new Map(prev); n.delete(activeModalCardId); return n; });
-              setActiveModalCardId(null);
+          // タイトルまたは本文がある場合は保存
+          if (phantomCard && (phantomCard.title?.trim() || phantomCard.body?.trim())) {
+              handleSaveCard(phantomCard, false);
           }
-      } else {
-          setActiveModalCardId(null);
+          
+          setPhantomCards(prev => { const n = new Map(prev); n.delete(activeModalCardId); return n; });
       }
+      setActiveModalCardId(null);
   };
 
   const handleCloseSide = () => {
       if (activeSideCardId && phantomCards.has(activeSideCardId)) {
           const phantomCard = phantomCards.get(activeSideCardId);
           
-          if (phantomCard) {
-              handleSaveCard(phantomCard, true);
-          } else {
-              setPhantomCards(prev => { const n = new Map(prev); n.delete(activeSideCardId); return n; });
-              setActiveSideCardId(null);
+          // タイトルまたは本文がある場合は保存
+          if (phantomCard && (phantomCard.title?.trim() || phantomCard.body?.trim())) {
+              handleSaveCard(phantomCard, false);
           }
-      } else {
-          setActiveSideCardId(null);
+          
+          setPhantomCards(prev => { const n = new Map(prev); n.delete(activeSideCardId); return n; });
       }
+      setActiveSideCardId(null);
   };
 
   const handleSaveCard = (cardData: Partial<Card>, shouldClose = true) => {
       const currentId = cardData.id; 
       if (!currentId) return;
-
-      // Phantomカードの特別処理
-      const isPhantom = currentId.startsWith('phantom-');
-      
-      if (isPhantom) {
-          // 同じタイトルの既存カードを探す
-          const existingCard = cards.find(c => 
-              !c.isDeleted && 
-              c.title === cardData.title
-          );
-          
-          if (existingCard) {
-              // 既存カードがある場合
-              if (cardData.body?.trim()) {
-                  // 本文がある場合は既存カードを更新
-                  setCards(cards.map(c => 
-                      c.id === existingCard.id 
-                          ? { ...c, body: cardData.body || c.body, updatedAt: Date.now() } as Card 
-                          : c
-                  ));
-                  
-                  setSyncMetadata(prev => ({
-                      ...prev,
-                      localChanges: [...new Set([...prev.localChanges, existingCard.id])]
-                  }));
-                  
-                  // モーダル/サイドを既存カードに切り替え
-                  if (activeModalCardId === currentId) setActiveModalCardId(existingCard.id);
-                  if (activeSideCardId === currentId) setActiveSideCardId(existingCard.id);
-              } else {
-                  // 本文がない場合は既存カードをそのまま開く
-                  if (activeModalCardId === currentId) setActiveModalCardId(existingCard.id);
-                  if (activeSideCardId === currentId) setActiveSideCardId(existingCard.id);
-              }
-              
-              // Phantomを削除
-              setPhantomCards(prev => { const n = new Map(prev); n.delete(currentId); return n; });
-              
-              if (shouldClose) {
-                  if (activeModalCardId === currentId) setActiveModalCardId(null);
-                  if (activeSideCardId === currentId) setActiveSideCardId(null);
-              }
-              return;
-          }
-          
-          // 既存カードがない場合は新規作成
-          if (cardData.body?.trim() || cardData.title?.trim()) {
-              const newId = generateId();
-              const newCard: Card = {
-                  id: newId,
-                  type: cardData.type || CardType.Record,
-                  title: cardData.title || '無題',
-                  body: cardData.body || '',
-                  createdAt: cardData.createdAt || Date.now(),
-                  updatedAt: Date.now(),
-                  dueDate: cardData.dueDate,
-                  completed: false,
-                  stacks: cardData.stacks || [],
-                  isDeleted: false,
-                  isPinned: cardData.isPinned || false
-              };
-              setCards([newCard, ...cards]);
-
-              if (activeModalCardId === currentId) setActiveModalCardId(shouldClose ? null : newId);
-              if (activeSideCardId === currentId) setActiveSideCardId(shouldClose ? null : newId);
-              
-              setPhantomCards(prev => { const n = new Map(prev); n.delete(currentId); return n; });
-              
-              setSyncMetadata(prev => ({
-                  ...prev,
-                  localChanges: [...new Set([...prev.localChanges, newId])]
-              }));
-          } else {
-              // 内容が空の場合はPhantomを削除するだけ
-              setPhantomCards(prev => { const n = new Map(prev); n.delete(currentId); return n; });
-              
-              if (shouldClose) {
-                  if (activeModalCardId === currentId) setActiveModalCardId(null);
-                  if (activeSideCardId === currentId) setActiveSideCardId(null);
-              }
-          }
-          return;
-      }
 
       // タイトルの重複チェック（新規作成時とタイトル変更時）
       if (cardData.title && cardData.title.trim()) {
@@ -887,8 +800,7 @@ export default function App() {
 
       let actualSavedId = currentId;
 
-      // new- で始まるカードの処理
-      if (currentId.startsWith('new-')) {
+      if (phantomCards.has(currentId)) {
           const existingIndex = cards.findIndex(c => c.id === currentId);
 
           if (existingIndex === -1) {
@@ -909,71 +821,65 @@ export default function App() {
               };
               setCards([newCard, ...cards]);
 
-              if (activeModalCardId === currentId) setActiveModalCardId(shouldClose ? null : newId);
-              if (activeSideCardId === currentId) setActiveSideCardId(shouldClose ? null : newId);
+              if (activeModalCardId === currentId) setActiveModalCardId(newId);
+              if (activeSideCardId === currentId) setActiveSideCardId(newId);
               
               setPhantomCards(prev => { const n = new Map(prev); n.delete(currentId); return n; });
-              
-              setSyncMetadata(prev => ({
-                  ...prev,
-                  localChanges: [...new Set([...prev.localChanges, newId])]
-              }));
           }
-          return;
-      }
-
-      // 既存カードの更新処理
-      const oldCard = cards.find(c => c.id === currentId);
-      
-      if (oldCard) {
-          const hasChanges = 
-              oldCard.title !== cardData.title ||
-              oldCard.body !== cardData.body ||
-              oldCard.type !== cardData.type ||
-              oldCard.dueDate !== cardData.dueDate ||
-              oldCard.completed !== cardData.completed ||
-              oldCard.isPinned !== cardData.isPinned ||
-              JSON.stringify(oldCard.stacks?.sort()) !== JSON.stringify(cardData.stacks?.sort());
-          
-          if (!hasChanges) {
-              return;
-          }
-      }
-      
-      const titleChanged = oldCard && cardData.title && oldCard.title !== cardData.title;
-
-      if (titleChanged && oldCard) {
-          const escapedOldTitle = oldCard.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const oldTitleRegex = new RegExp(`\\[\\[${escapedOldTitle}\\]\\]`, 'g');
-          const newLink = `[[${cardData.title}]]`;
-
-          if (isDropboxConnected) {
-              renameCardInDropbox(oldCard, cardData.title).catch(err => {
-                  console.error('Failed to rename file in Dropbox:', err);
-              });
-          }
-
-          setCards(cards.map(c => {
-              if (c.id === currentId) {
-                  return { ...c, ...cardData, updatedAt: Date.now() } as Card;
-              }
-              if (c.body.match(oldTitleRegex)) {
-                  return {
-                      ...c,
-                      body: c.body.replace(oldTitleRegex, newLink),
-                      updatedAt: Date.now()
-                  };
-              }
-              return c;
-          }));
       } else {
-          setCards(cards.map(c => c.id === currentId ? { 
-              ...c, 
-              ...cardData, 
-              updatedAt: Date.now() 
-          } as Card : c));
+          const oldCard = cards.find(c => c.id === currentId);
+          
+          if (oldCard) {
+              const hasChanges = 
+                  oldCard.title !== cardData.title ||
+                  oldCard.body !== cardData.body ||
+                  oldCard.type !== cardData.type ||
+                  oldCard.dueDate !== cardData.dueDate ||
+                  oldCard.completed !== cardData.completed ||
+                  oldCard.isPinned !== cardData.isPinned ||
+                  JSON.stringify(oldCard.stacks?.sort()) !== JSON.stringify(cardData.stacks?.sort());
+              
+              if (!hasChanges) {
+                  return;
+              }
+          }
+          
+          const titleChanged = oldCard && cardData.title && oldCard.title !== cardData.title;
+
+          if (titleChanged && oldCard) {
+              const escapedOldTitle = oldCard.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const oldTitleRegex = new RegExp(`\\[\\[${escapedOldTitle}\\]\\]`, 'g');
+              const newLink = `[[${cardData.title}]]`;
+
+              if (isDropboxConnected) {
+                  renameCardInDropbox(oldCard, cardData.title).catch(err => {
+                      console.error('Failed to rename file in Dropbox:', err);
+                  });
+              }
+
+              setCards(cards.map(c => {
+                  if (c.id === currentId) {
+                      return { ...c, ...cardData, updatedAt: Date.now() } as Card;
+                  }
+                  if (c.body.match(oldTitleRegex)) {
+                      return {
+                          ...c,
+                          body: c.body.replace(oldTitleRegex, newLink),
+                          updatedAt: Date.now()
+                      };
+                  }
+                  return c;
+              }));
+          } else {
+              setCards(cards.map(c => c.id === currentId ? { 
+                  ...c, 
+                  ...cardData, 
+                  updatedAt: Date.now() 
+              } as Card : c));
+          }
       }
       
+      // 変更があった場合のみ localChanges に追加
       setSyncMetadata(prev => ({
         ...prev,
         localChanges: [...new Set([...prev.localChanges, actualSavedId])]
