@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { Card, CardType } from '../types';
 import { formatTimeShort, formatTimestampByPattern } from '../utils';
 import { CardRenderer } from './CardRenderer';
@@ -29,7 +29,10 @@ const TypeIcon = ({ type, className }: { type: CardType, className?: string }) =
     }
 };
 
-export const Editor: React.FC<EditorProps> = ({ 
+export const Editor = forwardRef
+  { forceSave: () => void }, // 公開するメソッド
+  EditorProps
+>(({ 
   initialCard, 
   allTitles, 
   allCards, 
@@ -41,7 +44,7 @@ export const Editor: React.FC<EditorProps> = ({
   onNavigate, 
   onMoveToSide,
   backlinks = [] 
-}) => {
+}, ref) => {
   // state
   const [type, setType] = useState<CardType>(initialCard?.type || CardType.Record);
   const [title, setTitle] = useState(initialCard?.title || '');
@@ -149,6 +152,32 @@ export const Editor: React.FC<EditorProps> = ({
       };
     });
   }, [backlinks, allCards]);
+
+  useImperativeHandle(ref, () => ({
+    forceSave: () => {
+        // 本文がある場合のみ保存
+        if (body.trim()) {
+        let dueTimestamp: number | undefined = undefined;
+        if (type === CardType.GTD && dueDate) {
+            dueTimestamp = new Date(dueDate).getTime();
+        }
+        const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        const createdTimestamp = new Date(createdAt).getTime();
+        
+        onSave({
+            id: initialCard?.id,
+            title: title || '無題',
+            body,
+            type,
+            dueDate: dueTimestamp,
+            stacks: stackList,
+            createdAt: createdTimestamp,
+            completed: type === CardType.GTD ? completed : false,
+            isPinned
+        }, false); // shouldClose = false
+        }
+    }
+  }));
 
   useEffect(() => {
     if (containerRef.current) {
@@ -842,4 +871,5 @@ export const Editor: React.FC<EditorProps> = ({
       </div>
     </div>
   );
+  Editor.displayName = 'Editor';
 };

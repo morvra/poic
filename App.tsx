@@ -84,6 +84,7 @@ export default function App() {
   const [batchTagInput, setBatchTagInput] = useState('');
 
   // Editor State
+  const editorRef = useRef<{ forceSave: () => void }>(null);
   const [activeModalCardId, setActiveModalCardId] = useState<string | null>(null);
   const [activeSideCardId, setActiveSideCardId] = useState<string | null>(null);
   
@@ -718,16 +719,19 @@ export default function App() {
   };
 
   const handleLinkClick = (term: string, e?: React.MouseEvent) => {
-      // リンククリック前に、現在のモーダルカードを保存
+      // リンククリック前に、現在のモーダルカードが新規/Phantomなら保存
       if (activeModalCardId && (
           activeModalCardId.startsWith('new-') || 
           activeModalCardId.startsWith('phantom-')
       )) {
-          const currentCard = phantomCards.get(activeModalCardId);
-          // 本文がある場合のみ保存
-          if (currentCard && currentCard.body?.trim()) {
-              handleSaveCard(currentCard, false);
-              // phantomCardsから削除（保存済みなので）
+          // Editor の forceSave を呼び出す
+          if (editorRef.current) {
+              console.log('Forcing save before navigation...');
+              editorRef.current.forceSave();
+          }
+          
+          // phantomCardsから削除（もし存在すれば）
+          if (phantomCards.has(activeModalCardId)) {
               setPhantomCards(prev => {
                   const n = new Map(prev);
                   n.delete(activeModalCardId);
@@ -1048,6 +1052,7 @@ return (
           >
               <div className="w-full max-w-2xl h-auto max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl bg-paper pointer-events-auto">
                   <Editor 
+                      ref={editorRef}
                       initialCard={activeModalCard}
                       allTitles={allTitles}
                       allCards={cards}
