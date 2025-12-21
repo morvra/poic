@@ -92,7 +92,7 @@ export const LinkCard: React.FC<LinkCardProps> = ({
                     e.stopPropagation();
                     onClick(link, e);
                   }}
-                  className="text-[10px] bg-stone-200/50 hover:bg-stone-300/50 px-1.5 py-0.5 rounded text-stone-600 hover:text-stone-800 transition-colors"
+                  className="text-[12px] bg-stone-200/50 hover:bg-stone-300/50 px-1.5 py-0.5 rounded text-stone-600 hover:text-stone-800 transition-colors"
                 >
                   {link}
                 </button>
