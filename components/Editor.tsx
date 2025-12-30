@@ -570,7 +570,7 @@ export const Editor: React.FC<EditorProps> = ({
   const handleBodyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const val = e.target.value;
       setBody(val);
-      
+
       if (bodyRef.current) {
           const scrollTop = containerRef.current?.scrollTop || 0;
           bodyRef.current.style.height = 'auto';
@@ -636,6 +636,25 @@ export const Editor: React.FC<EditorProps> = ({
           }
       } else {
           setShowStackSuggestions(false);
+      }
+  };
+
+  const handleStackKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Tab' && !e.shiftKey) {
+          e.preventDefault();
+          
+          // 編集モードに切り替えてフォーカス
+          setIsEditingBody(true);
+          
+          // 次のフレームでフォーカスとカーソル位置を設定
+          requestAnimationFrame(() => {
+              if (bodyRef.current) {
+                  bodyRef.current.focus();
+                  // カーソルを本文の最後に配置
+                  const len = bodyRef.current.value.length;
+                  bodyRef.current.setSelectionRange(len, len);
+              }
+          });
       }
   };
 
@@ -896,6 +915,7 @@ export const Editor: React.FC<EditorProps> = ({
                     className="w-full bg-transparent border-b border-stone-200 px-0 py-1.5 text-sm focus:outline-none focus:border-stone-400 transition-all text-stone-600 placeholder-stone-300"
                     value={stacks}
                     onChange={handleStackChange}
+                    onKeyDown={handleStackKeyDown}
                     onBlur={() => setTimeout(() => setShowStackSuggestions(false), 200)}
                 />
                 {/* Stack Autocomplete Dropdown */}
