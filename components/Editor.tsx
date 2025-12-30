@@ -355,9 +355,6 @@ export const Editor: React.FC<EditorProps> = ({
           const cursorPos = textarea.selectionStart;
           const text = textarea.value;
           
-          // スクロール位置を保存
-          const scrollTop = textarea.scrollTop;
-          
           // 現在の行の開始位置を計算
           const beforeCursor = text.substring(0, cursorPos);
           const currentLineStart = beforeCursor.lastIndexOf('\n') + 1;
@@ -369,11 +366,9 @@ export const Editor: React.FC<EditorProps> = ({
             
             setBody(newText);
             
-            // レンダリング後にカーソルとスクロール位置を復元
             requestAnimationFrame(() => {
               if (bodyRef.current) {
                 bodyRef.current.setSelectionRange(newPos, newPos);
-                bodyRef.current.scrollTop = scrollTop;
               }
             });
             
@@ -401,7 +396,6 @@ export const Editor: React.FC<EditorProps> = ({
               requestAnimationFrame(() => {
                 if (bodyRef.current) {
                   bodyRef.current.setSelectionRange(newPos, newPos);
-                  bodyRef.current.scrollTop = scrollTop;
                 }
               });
             }
@@ -416,9 +410,6 @@ export const Editor: React.FC<EditorProps> = ({
           const textarea = bodyRef.current;
           const text = textarea.value;
           const cursorPos = textarea.selectionStart;
-          
-          // スクロール位置を保存
-          const scrollTop = textarea.scrollTop;
           
           // 現在の行を特定
           const lines = text.split('\n');
@@ -447,7 +438,6 @@ export const Editor: React.FC<EditorProps> = ({
             requestAnimationFrame(() => {
               if (bodyRef.current) {
                 bodyRef.current.setSelectionRange(newPos, newPos);
-                bodyRef.current.scrollTop = scrollTop;
               }
             });
             
@@ -465,7 +455,6 @@ export const Editor: React.FC<EditorProps> = ({
             requestAnimationFrame(() => {
               if (bodyRef.current) {
                 bodyRef.current.setSelectionRange(newPos, newPos);
-                bodyRef.current.scrollTop = scrollTop;
               }
             });
           }
@@ -945,10 +934,11 @@ export const Editor: React.FC<EditorProps> = ({
                                         const newText = text.substring(0, currentLineStart) + text.substring(cursorPos);
                                         setBody(newText);
                                         
-                                        setTimeout(() => {
-                                            textarea.setSelectionRange(currentLineStart, currentLineStart);
-                                            textarea.focus();
-                                        }, 0);
+                                        requestAnimationFrame(() => {
+                                            if (bodyRef.current) {
+                                                bodyRef.current.setSelectionRange(currentLineStart, currentLineStart);
+                                            }
+                                        });
                                         return;
                                     }
                                     
@@ -959,10 +949,11 @@ export const Editor: React.FC<EditorProps> = ({
                                     
                                     setBody(newText);
                                     
-                                    setTimeout(() => {
-                                        textarea.setSelectionRange(newCursorPos, newCursorPos);
-                                        textarea.focus();
-                                    }, 0);
+                                    requestAnimationFrame(() => {
+                                        if (bodyRef.current) {
+                                            bodyRef.current.setSelectionRange(newCursorPos, newCursorPos);
+                                        }
+                                    });
                                 }
                             }
                         }}
