@@ -442,16 +442,14 @@ export const Editor: React.FC<EditorProps> = ({
           lines[currentLineIndex - 1] = temp;
           
           const newText = lines.join('\n');
-          setBody(newText);
+          const newPos = cursorPos - lines[currentLineIndex].length - 1;
           
-          // カーソル位置を調整
-          setTimeout(() => {
-            if (textarea) {
-              const newPos = cursorPos - lines[currentLineIndex].length - 1;
-              textarea.setSelectionRange(newPos, newPos);
-              textarea.focus();
-            }
-          }, 0);
+          // カーソル位置を保持したまま値を更新
+          textarea.value = newText;
+          textarea.setSelectionRange(newPos, newPos);
+          
+          // Reactの状態も更新
+          setBody(newText);
           
         } else if (e.key === 'ArrowDown' && currentLineIndex < lines.length - 1) {
           // 下の行と入れ替え
@@ -460,16 +458,14 @@ export const Editor: React.FC<EditorProps> = ({
           lines[currentLineIndex + 1] = temp;
           
           const newText = lines.join('\n');
-          setBody(newText);
+          const newPos = cursorPos + lines[currentLineIndex].length + 1;
           
-          // カーソル位置を調整
-          setTimeout(() => {
-            if (textarea) {
-              const newPos = cursorPos + lines[currentLineIndex].length + 1;
-              textarea.setSelectionRange(newPos, newPos);
-              textarea.focus();
-            }
-          }, 0);
+          // カーソル位置を保持したまま値を更新
+          textarea.value = newText;
+          textarea.setSelectionRange(newPos, newPos);
+          
+          // Reactの状態も更新
+          setBody(newText);
         }
         
         return;
