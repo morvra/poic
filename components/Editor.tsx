@@ -194,6 +194,9 @@ export const Editor: React.FC<EditorProps> = ({
       const prevId = prevCardIdRef.current;
 
       if (initialCard) {
+          // カーソル位置を保存
+          const savedCursorPos = bodyRef.current?.selectionStart;
+          
           setType(initialCard.type);
           setTitle(initialCard.title);
           setBody(initialCard.body);
@@ -203,6 +206,15 @@ export const Editor: React.FC<EditorProps> = ({
           setCompleted(initialCard.completed || false);
           setIsPinned(initialCard.isPinned);
           setShowDeleteConfirm(false);
+          
+          // カーソル位置を復元（編集中のみ）
+          if (savedCursorPos !== undefined && isEditingBody && prevId === currentId) {
+              setTimeout(() => {
+                  if (bodyRef.current) {
+                      bodyRef.current.setSelectionRange(savedCursorPos, savedCursorPos);
+                  }
+              }, 0);
+          }
           
           if (!initialCard.id) {
               setIsEditingBody(true);
@@ -342,49 +354,64 @@ export const Editor: React.FC<EditorProps> = ({
         
         if (e.key === 'ArrowRight') {
           // インデント追加（2スペース）
-          lines[currentLineIndex] = '  ' + currentLine;
-          const newText = lines.join('\n');
+          e.preventDefault();
+          
+          const textarea = bodyRef.current;
+          if (!textarea) return;
+          
+          // 現在の行の開始位置を計算
+          const beforeCursor = text.substring(0, cursorPos);
+          const currentLineStart = beforeCursor.lastIndexOf('\n') + 1;
+          
+          // テキストを再構築
+          const newText = text.substring(0, currentLineStart) + '  ' + text.substring(currentLineStart);
+          const newPos = cursorPos + 2;
+          
+          // カーソル位置を保持したまま値を更新
+          textarea.value = newText;
+          textarea.setSelectionRange(newPos, newPos);
+          
+          // Reactの状態も更新
           setBody(newText);
           
-          setTimeout(() => {
-            if (textarea) {
-              const newPos = cursorPos + 2;
-              textarea.setSelectionRange(newPos, newPos);
-              textarea.focus();
-            }
-          }, 0);
+          return;
           
         } else if (e.key === 'ArrowLeft') {
-          // インデント削除（最大2スペース）
+          e.preventDefault();
+          
+          const textarea = bodyRef.current;
+          if (!textarea) return;
+          
+          // 現在の行の開始位置を計算
+          const beforeCursor = text.substring(0, cursorPos);
+          const currentLineStart = beforeCursor.lastIndexOf('\n') + 1;
+          const currentLineEnd = text.indexOf('\n', currentLineStart);
+          const lineEnd = currentLineEnd === -1 ? text.length : currentLineEnd;
+          const currentLine = text.substring(currentLineStart, lineEnd);
+          
+          let removedChars = 0;
+          let newText = text;
+          
           if (currentLine.startsWith('  ')) {
-            lines[currentLineIndex] = currentLine.substring(2);
-            const newText = lines.join('\n');
-            setBody(newText);
-            
-            setTimeout(() => {
-              if (textarea) {
-                const newPos = Math.max(cursorPos - 2, 0);
-                textarea.setSelectionRange(newPos, newPos);
-                textarea.focus();
-              }
-            }, 0);
+            newText = text.substring(0, currentLineStart) + text.substring(currentLineStart + 2);
+            removedChars = 2;
           } else if (currentLine.startsWith(' ')) {
-            // 1スペースだけの場合も削除
-            lines[currentLineIndex] = currentLine.substring(1);
-            const newText = lines.join('\n');
-            setBody(newText);
-            
-            setTimeout(() => {
-              if (textarea) {
-                const newPos = Math.max(cursorPos - 1, 0);
-                textarea.setSelectionRange(newPos, newPos);
-                textarea.focus();
-              }
-            }, 0);
+            newText = text.substring(0, currentLineStart) + text.substring(currentLineStart + 1);
+            removedChars = 1;
           }
+          
+          if (removedChars > 0) {
+            const newPos = Math.max(cursorPos - removedChars, currentLineStart);
+            
+            // カーソル位置を保持したまま値を更新
+            textarea.value = newText;
+            textarea.setSelectionRange(newPos, newPos);
+            
+            // Reactの状態も更新
+            setBody(newText);
+          }
+          return;
         }
-        return;
-      }
 
       if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && bodyRef.current && document.activeElement === bodyRef.current) {
         e.preventDefault();
