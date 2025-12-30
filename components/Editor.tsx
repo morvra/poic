@@ -193,23 +193,34 @@ export const Editor: React.FC<EditorProps> = ({
           const isNewCard = !initialCard?.id || initialCard.id.startsWith('new-');
           const isPhantom = initialCard?.id?.startsWith('phantom-');
           
-          // 新規カードまたはphantomカードの場合はフォーカス
-          if (isNewCard || isPhantom) {
-              bodyRef.current.focus();
-          }
-          // initialCursorOffsetが設定されている場合はカーソル位置を復元
-          if (initialCursorOffset !== null) {
-              const len = bodyRef.current.value.length;
-              const pos = Math.min(Math.max(0, initialCursorOffset), len);
-              bodyRef.current.setSelectionRange(pos, pos);
-              setInitialCursorOffset(null);
-          }
-          if (savedScrollTop.current !== null && containerRef.current) {
-              containerRef.current.scrollTop = savedScrollTop.current;
-              savedScrollTop.current = null;
-          }
+          // requestAnimationFrameを使って確実にDOMが更新された後に処理
+          requestAnimationFrame(() => {
+              if (!bodyRef.current) return;
+              
+              // 新規カードまたはphantomカードの場合はフォーカス
+              if (isNewCard || isPhantom) {
+                  bodyRef.current.focus();
+              }
+              
+              // initialCursorOffsetが設定されている場合はカーソル位置を復元
+              if (initialCursorOffset !== null) {
+                  const len = bodyRef.current.value.length;
+                  const pos = Math.min(Math.max(0, initialCursorOffset), len);
+                  
+                  // フォーカスしてからカーソル位置を設定
+                  bodyRef.current.focus();
+                  bodyRef.current.setSelectionRange(pos, pos);
+                  setInitialCursorOffset(null);
+              }
+              
+              // スクロール位置を復元
+              if (savedScrollTop.current !== null && containerRef.current) {
+                  containerRef.current.scrollTop = savedScrollTop.current;
+                  savedScrollTop.current = null;
+              }
+          });
       }
-  }, [isEditingBody]);
+  }, [isEditingBody, initialCursorOffset]);
 
   useEffect(() => {
       const currentId = initialCard?.id;
@@ -633,27 +644,38 @@ export const Editor: React.FC<EditorProps> = ({
   };
 
   const handleViewModeClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const selection = window.getSelection();
-    if (selection && selection.toString().length > 0) {
-        return;
-    }
+      // テキスト選択中はクリック位置の検出をスキップ
+      const selection = window.getSelection();
+      if (selection && selection.toString().length > 0) {
+          return;
+      }
 
-    let offset = body.length;
-    if (selection && selection.rangeCount > 0 && readViewRef.current) {
-        const range = selection.getRangeAt(0);
-        if (readViewRef.current.contains(range.startContainer)) {
-             const preCaretRange = range.cloneRange();
-             preCaretRange.selectNodeContents(readViewRef.current);
-             preCaretRange.setEnd(range.startContainer, range.startOffset);
-             offset = preCaretRange.toString().length;
-        }
-    }
-    if (containerRef.current) {
-        savedScrollTop.current = containerRef.current.scrollTop;
-    }
-    setInitialCursorOffset(offset);
-    setIsEditingBody(true);
-    isMouseDownRef.current = false;
+      // クリック位置を基にカーソル位置を計算
+      let offset = 0;
+      
+      if (readViewRef.current) {
+          // クリック位置に最も近いテキストノードとオフセットを取得
+          const range = document.caretRangeFromPoint(e.clientX, e.clientY);
+          
+          if (range && readViewRef.current.contains(range.startContainer)) {
+              // readViewRefの先頭からクリック位置までのテキスト長を計算
+              const preRange = document.createRange();
+              preRange.selectNodeContents(readViewRef.current);
+              preRange.setEnd(range.startContainer, range.startOffset);
+              offset = preRange.toString().length;
+          } else {
+              // フォールバック: クリック位置が取得できない場合は末尾
+              offset = body.length;
+          }
+      }
+      
+      // スクロール位置を保存
+      if (containerRef.current) {
+          savedScrollTop.current = containerRef.current.scrollTop;
+      }
+      
+      setInitialCursorOffset(offset);
+      setIsEditingBody(true);
   };
 
   const handleDeleteClick = () => {
@@ -982,11 +1004,6 @@ export const Editor: React.FC<EditorProps> = ({
                 <div
                     ref={readViewRef}
                     onClick={handleViewModeClick}
-                    onMouseDown={() => { isMouseDownRef.current = true; }}
-                    onMouseUp={() => { isMouseDownRef.current = false; }}
-                    onFocus={() => {
-                        if (!isMouseDownRef.current) setIsEditingBody(true);
-                    }}
                     tabIndex={0}
                     className="w-full min-h-[150px] cursor-text outline-none"
                 >
