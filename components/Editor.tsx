@@ -305,226 +305,218 @@ export const Editor: React.FC<EditorProps> = ({
       if (isEditingBody && bodyRef.current) {
           bodyRef.current.style.height = 'auto';
           bodyRef.current.style.height = `${bodyRef.current.scrollHeight}px`;
-          const isPhantom = !initialCard?.id && !!initialCard?.title;
-          const isExplicitEdit = !!initialCard?.id;
-          const isTabFocus = document.activeElement === readViewRef.current;
-          if (isPhantom || isExplicitEdit || isTabFocus) {
-              bodyRef.current.focus();
-          }
-          if (initialCursorOffset !== null) {
-              const len = bodyRef.current.value.length;
-              const pos = Math.min(Math.max(0, initialCursorOffset), len);
-              bodyRef.current.setSelectionRange(pos, pos);
-              setInitialCursorOffset(null);
-          }
-          if (savedScrollTop.current !== null && containerRef.current) {
-              containerRef.current.scrollTop = savedScrollTop.current;
-              savedScrollTop.current = null;
-          }
       }
   }, [isEditingBody]);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!containerRef.current?.contains(document.activeElement)) {
-          return;
-      }
-
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && bodyRef.current && document.activeElement === bodyRef.current) {
-        e.preventDefault();
-        
-        const textarea = bodyRef.current;
-        const text = textarea.value;
-        const cursorPos = textarea.selectionStart;
-        
-        // 現在の行を特定
-        const lines = text.split('\n');
-        let currentLineIndex = 0;
-        let charCount = 0;
-        
-        for (let i = 0; i < lines.length; i++) {
-          charCount += lines[i].length + 1;
-          if (charCount > cursorPos) {
-            currentLineIndex = i;
-            break;
-          }
-        }
-        
-        const currentLine = lines[currentLineIndex];
-        
-        if (e.key === 'ArrowRight') {
-          // インデント追加（2スペース）
-          e.preventDefault();
-          
-          const textarea = bodyRef.current;
-          if (!textarea) return;
-          
-          // 現在の行の開始位置を計算
-          const beforeCursor = text.substring(0, cursorPos);
-          const currentLineStart = beforeCursor.lastIndexOf('\n') + 1;
-          
-          // テキストを再構築
-          const newText = text.substring(0, currentLineStart) + '  ' + text.substring(currentLineStart);
-          const newPos = cursorPos + 2;
-          
-          // カーソル位置を保持したまま値を更新
-          textarea.value = newText;
-          textarea.setSelectionRange(newPos, newPos);
-          
-          // Reactの状態も更新
-          setBody(newText);
-          
-          return;
-          
-        } else if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          
-          const textarea = bodyRef.current;
-          if (!textarea) return;
-          
-          // 現在の行の開始位置を計算
-          const beforeCursor = text.substring(0, cursorPos);
-          const currentLineStart = beforeCursor.lastIndexOf('\n') + 1;
-          const currentLineEnd = text.indexOf('\n', currentLineStart);
-          const lineEnd = currentLineEnd === -1 ? text.length : currentLineEnd;
-          const currentLine = text.substring(currentLineStart, lineEnd);
-          
-          let removedChars = 0;
-          let newText = text;
-          
-          if (currentLine.startsWith('  ')) {
-            newText = text.substring(0, currentLineStart) + text.substring(currentLineStart + 2);
-            removedChars = 2;
-          } else if (currentLine.startsWith(' ')) {
-            newText = text.substring(0, currentLineStart) + text.substring(currentLineStart + 1);
-            removedChars = 1;
-          }
-          
-          if (removedChars > 0) {
-            const newPos = Math.max(cursorPos - removedChars, currentLineStart);
-            
-            // カーソル位置を保持したまま値を更新
-            textarea.value = newText;
-            textarea.setSelectionRange(newPos, newPos);
-            
-            // Reactの状態も更新
-            setBody(newText);
-          }
-          return;
-        }
-      }
-
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && bodyRef.current && document.activeElement === bodyRef.current) {
-        e.preventDefault();
-        
-        const textarea = bodyRef.current;
-        const text = textarea.value;
-        const cursorPos = textarea.selectionStart;
-        
-        // 現在の行を特定
-        const lines = text.split('\n');
-        let currentLineIndex = 0;
-        let charCount = 0;
-        
-        for (let i = 0; i < lines.length; i++) {
-          charCount += lines[i].length + 1; // +1 for \n
-          if (charCount > cursorPos) {
-            currentLineIndex = i;
-            break;
-          }
-        }
-        
-        // 入れ替え処理
-        if (e.key === 'ArrowUp' && currentLineIndex > 0) {
-          // 上の行と入れ替え
-          const temp = lines[currentLineIndex];
-          lines[currentLineIndex] = lines[currentLineIndex - 1];
-          lines[currentLineIndex - 1] = temp;
-          
-          const newText = lines.join('\n');
-          const newPos = cursorPos - lines[currentLineIndex].length - 1;
-          
-          // カーソル位置を保持したまま値を更新
-          textarea.value = newText;
-          textarea.setSelectionRange(newPos, newPos);
-          
-          // Reactの状態も更新
-          setBody(newText);
-          
-        } else if (e.key === 'ArrowDown' && currentLineIndex < lines.length - 1) {
-          // 下の行と入れ替え
-          const temp = lines[currentLineIndex];
-          lines[currentLineIndex] = lines[currentLineIndex + 1];
-          lines[currentLineIndex + 1] = temp;
-          
-          const newText = lines.join('\n');
-          const newPos = cursorPos + lines[currentLineIndex].length + 1;
-          
-          // カーソル位置を保持したまま値を更新
-          textarea.value = newText;
-          textarea.setSelectionRange(newPos, newPos);
-          
-          // Reactの状態も更新
-          setBody(newText);
-        }
-        
-        return;
-      }
-
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        
-        if (!title.trim() && !body.trim()) {
-            onCancel();
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (!containerRef.current?.contains(document.activeElement)) {
             return;
         }
-        
-        handleAutoSave();
-        onSave({
-            id: initialCard?.id,
-            title,
-            body,
-            type,
-            dueDate: type === CardType.GTD && dueDate ? new Date(dueDate).getTime() : undefined,
-            stacks: stacks.split(',').map(s => s.trim()).filter(s => s.length > 0),
-            createdAt: new Date(createdAt).getTime(),
-            completed: type === CardType.GTD ? completed : false,
-            isPinned
-        }, true);
-        return;
-      }
-      if (e.altKey && e.key.toLowerCase() === 't') {
-        e.preventDefault();
-        if (!isEditingBody) {
-             setInitialCursorOffset(body.length);
-             setIsEditingBody(true);
-             setTimeout(() => insertTimestamp(), 50);
-        } else {
-             insertTimestamp();
+
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && bodyRef.current && document.activeElement === bodyRef.current) {
+          e.preventDefault();
+          
+          const textarea = bodyRef.current;
+          const text = textarea.value;
+          const cursorPos = textarea.selectionStart;
+          
+          // スクロール位置を保存
+          const scrollTop = textarea.scrollTop;
+          
+          // 現在の行を特定
+          const lines = text.split('\n');
+          let currentLineIndex = 0;
+          let charCount = 0;
+          
+          for (let i = 0; i < lines.length; i++) {
+            charCount += lines[i].length + 1;
+            if (charCount > cursorPos) {
+              currentLineIndex = i;
+              break;
+            }
+          }
+          
+          if (e.key === 'ArrowRight') {
+            // インデント追加（2スペース）
+            const beforeCursor = text.substring(0, cursorPos);
+            const currentLineStart = beforeCursor.lastIndexOf('\n') + 1;
+            
+            // テキストを再構築
+            const newText = text.substring(0, currentLineStart) + '  ' + text.substring(currentLineStart);
+            const newPos = cursorPos + 2;
+            
+            // Reactの状態を更新
+            setBody(newText);
+            
+            // 次のレンダリングサイクルでカーソル位置とスクロール位置を復元
+            requestAnimationFrame(() => {
+              if (bodyRef.current) {
+                bodyRef.current.setSelectionRange(newPos, newPos);
+                bodyRef.current.scrollTop = scrollTop;
+              }
+            });
+            
+            return;
+            
+          } else if (e.key === 'ArrowLeft') {
+            const beforeCursor = text.substring(0, cursorPos);
+            const currentLineStart = beforeCursor.lastIndexOf('\n') + 1;
+            const currentLineEnd = text.indexOf('\n', currentLineStart);
+            const lineEnd = currentLineEnd === -1 ? text.length : currentLineEnd;
+            const currentLine = text.substring(currentLineStart, lineEnd);
+            
+            let removedChars = 0;
+            let newText = text;
+            
+            if (currentLine.startsWith('  ')) {
+              newText = text.substring(0, currentLineStart) + text.substring(currentLineStart + 2);
+              removedChars = 2;
+            } else if (currentLine.startsWith(' ')) {
+              newText = text.substring(0, currentLineStart) + text.substring(currentLineStart + 1);
+              removedChars = 1;
+            }
+            
+            if (removedChars > 0) {
+              const newPos = Math.max(cursorPos - removedChars, currentLineStart);
+              
+              // Reactの状態を更新
+              setBody(newText);
+              
+              // 次のレンダリングサイクルでカーソル位置とスクロール位置を復元
+              requestAnimationFrame(() => {
+                if (bodyRef.current) {
+                  bodyRef.current.setSelectionRange(newPos, newPos);
+                  bodyRef.current.scrollTop = scrollTop;
+                }
+              });
+            }
+            return;
+          }
         }
-      }
-      if (showWikiSuggestions) {
-          if (e.key === 'ArrowDown') { e.preventDefault(); setWikiSuggestionIndex(prev => (prev + 1) % wikiSuggestions.length); }
-          else if (e.key === 'ArrowUp') { e.preventDefault(); setWikiSuggestionIndex(prev => (prev - 1 + wikiSuggestions.length) % wikiSuggestions.length); }
-          else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectWikiSuggestion(wikiSuggestions[wikiSuggestionIndex]); }
-          else if (e.key === 'Escape') { setShowWikiSuggestions(false); e.stopPropagation(); }
+
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && bodyRef.current && document.activeElement === bodyRef.current) {
+          e.preventDefault();
+          
+          const textarea = bodyRef.current;
+          const text = textarea.value;
+          const cursorPos = textarea.selectionStart;
+          
+          // スクロール位置を保存
+          const scrollTop = textarea.scrollTop;
+          
+          // 現在の行を特定
+          const lines = text.split('\n');
+          let currentLineIndex = 0;
+          let charCount = 0;
+          
+          for (let i = 0; i < lines.length; i++) {
+            charCount += lines[i].length + 1; // +1 for \n
+            if (charCount > cursorPos) {
+              currentLineIndex = i;
+              break;
+            }
+          }
+          
+          // 入れ替え処理
+          if (e.key === 'ArrowUp' && currentLineIndex > 0) {
+            // 上の行と入れ替え
+            const temp = lines[currentLineIndex];
+            lines[currentLineIndex] = lines[currentLineIndex - 1];
+            lines[currentLineIndex - 1] = temp;
+            
+            const newText = lines.join('\n');
+            const newPos = cursorPos - lines[currentLineIndex].length - 1;
+            
+            // Reactの状態を更新
+            setBody(newText);
+            
+            // 次のレンダリングサイクルでカーソル位置とスクロール位置を復元
+            requestAnimationFrame(() => {
+              if (bodyRef.current) {
+                bodyRef.current.setSelectionRange(newPos, newPos);
+                bodyRef.current.scrollTop = scrollTop;
+              }
+            });
+            
+          } else if (e.key === 'ArrowDown' && currentLineIndex < lines.length - 1) {
+            // 下の行と入れ替え
+            const temp = lines[currentLineIndex];
+            lines[currentLineIndex] = lines[currentLineIndex + 1];
+            lines[currentLineIndex + 1] = temp;
+            
+            const newText = lines.join('\n');
+            const newPos = cursorPos + lines[currentLineIndex].length + 1;
+            
+            // Reactの状態を更新
+            setBody(newText);
+            
+            // 次のレンダリングサイクルでカーソル位置とスクロール位置を復元
+            requestAnimationFrame(() => {
+              if (bodyRef.current) {
+                bodyRef.current.setSelectionRange(newPos, newPos);
+                bodyRef.current.scrollTop = scrollTop;
+              }
+            });
+          }
+          
           return;
-      }
-      if (showStackSuggestions) {
-          if (e.key === 'ArrowDown') { e.preventDefault(); setStackSuggestionIndex(prev => (prev + 1) % stackSuggestions.length); }
-          else if (e.key === 'ArrowUp') { e.preventDefault(); setStackSuggestionIndex(prev => (prev - 1 + stackSuggestions.length) % stackSuggestions.length); }
-          else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectStackSuggestion(stackSuggestions[stackSuggestionIndex]); }
-          else if (e.key === 'Escape') { setShowStackSuggestions(false); e.stopPropagation(); }
+        }
+
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+          e.preventDefault();
+          
+          if (!title.trim() && !body.trim()) {
+              onCancel();
+              return;
+          }
+          
+          handleAutoSave();
+          onSave({
+              id: initialCard?.id,
+              title,
+              body,
+              type,
+              dueDate: type === CardType.GTD && dueDate ? new Date(dueDate).getTime() : undefined,
+              stacks: stacks.split(',').map(s => s.trim()).filter(s => s.length > 0),
+              createdAt: new Date(createdAt).getTime(),
+              completed: type === CardType.GTD ? completed : false,
+              isPinned
+          }, true);
           return;
-      }
-      if (e.key === 'Escape' && !showDeleteConfirm) {
-        handleClose();
-      } else if (e.key === 'Escape' && showDeleteConfirm) {
-          setShowDeleteConfirm(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+        }
+        if (e.altKey && e.key.toLowerCase() === 't') {
+          e.preventDefault();
+          if (!isEditingBody) {
+              setInitialCursorOffset(body.length);
+              setIsEditingBody(true);
+              setTimeout(() => insertTimestamp(), 50);
+          } else {
+              insertTimestamp();
+          }
+        }
+        if (showWikiSuggestions) {
+            if (e.key === 'ArrowDown') { e.preventDefault(); setWikiSuggestionIndex(prev => (prev + 1) % wikiSuggestions.length); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); setWikiSuggestionIndex(prev => (prev - 1 + wikiSuggestions.length) % wikiSuggestions.length); }
+            else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectWikiSuggestion(wikiSuggestions[wikiSuggestionIndex]); }
+            else if (e.key === 'Escape') { setShowWikiSuggestions(false); e.stopPropagation(); }
+            return;
+        }
+        if (showStackSuggestions) {
+            if (e.key === 'ArrowDown') { e.preventDefault(); setStackSuggestionIndex(prev => (prev + 1) % stackSuggestions.length); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); setStackSuggestionIndex(prev => (prev - 1 + stackSuggestions.length) % stackSuggestions.length); }
+            else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectStackSuggestion(stackSuggestions[stackSuggestionIndex]); }
+            else if (e.key === 'Escape') { setShowStackSuggestions(false); e.stopPropagation(); }
+            return;
+        }
+        if (e.key === 'Escape' && !showDeleteConfirm) {
+          handleClose();
+        } else if (e.key === 'Escape' && showDeleteConfirm) {
+            setShowDeleteConfirm(false);
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
   }, [body, onCancel, showWikiSuggestions, showStackSuggestions, wikiSuggestions, wikiSuggestionIndex, stackSuggestions, stackSuggestionIndex, isEditingBody, showDeleteConfirm, title, type, dueDate, stacks, createdAt, completed, isPinned, initialCard?.id, onSave]);
 
   const insertTimestamp = () => {
