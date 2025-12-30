@@ -317,7 +317,7 @@ export const Editor: React.FC<EditorProps> = ({
       if (!containerRef.current?.contains(document.activeElement)) {
           return;
       }
-      
+
       if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && bodyRef.current && document.activeElement === bodyRef.current) {
         e.preventDefault();
         
@@ -807,6 +807,51 @@ export const Editor: React.FC<EditorProps> = ({
                         placeholder="内容を入力... (Alt+T: タイムスタンプ, [[ : リンク)"
                         value={body}
                         onChange={handleBodyChange}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                                const textarea = e.target as HTMLTextAreaElement;
+                                const text = textarea.value;
+                                const cursorPos = textarea.selectionStart;
+                                
+                                // 現在の行を取得
+                                const beforeCursor = text.substring(0, cursorPos);
+                                const currentLineStart = beforeCursor.lastIndexOf('\n') + 1;
+                                const currentLine = text.substring(currentLineStart, cursorPos);
+                                
+                                // リストマーカーのパターンを検出（インデント含む）
+                                const listMatch = currentLine.match(/^(\s*)([-*+])\s/);
+                                
+                                if (listMatch) {
+                                    e.preventDefault();
+                                    
+                                    const [fullMatch, indent, marker] = listMatch;
+                                    
+                                    // 現在の行がマーカーだけの空行なら、マーカーを削除して普通の改行
+                                    if (currentLine.trim() === marker) {
+                                        const newText = text.substring(0, currentLineStart) + text.substring(cursorPos);
+                                        setBody(newText);
+                                        
+                                        setTimeout(() => {
+                                            textarea.setSelectionRange(currentLineStart, currentLineStart);
+                                            textarea.focus();
+                                        }, 0);
+                                        return;
+                                    }
+                                    
+                                    // 改行 + 同じインデント + 同じマーカーを挿入
+                                    const insertText = `\n${indent}${marker} `;
+                                    const newText = text.substring(0, cursorPos) + insertText + text.substring(cursorPos);
+                                    const newCursorPos = cursorPos + insertText.length;
+                                    
+                                    setBody(newText);
+                                    
+                                    setTimeout(() => {
+                                        textarea.setSelectionRange(newCursorPos, newCursorPos);
+                                        textarea.focus();
+                                    }, 0);
+                                }
+                            }
+                        }}
                         onBlur={() => {
                             setTimeout(() => {
                                 if (!showWikiSuggestions) {
@@ -815,6 +860,7 @@ export const Editor: React.FC<EditorProps> = ({
                             }, 200);
                         }}
                     />
+                    
                      {/* WikiLink Autocomplete Dropdown */}
                     {showWikiSuggestions && (
                         <div
