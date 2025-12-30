@@ -985,7 +985,7 @@ export default function App() {
     // 新しいカードを作成
     const newCard: Card = {
       id: generateId(),
-      type: CardType.Discovery,
+      type: CardType.Record,
       title: `Hub: ${formatTimestampByPattern(new Date(), dateFormat)}`,
       body: body,
       createdAt: Date.now(),
