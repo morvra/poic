@@ -528,7 +528,7 @@ export const Editor: React.FC<EditorProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [body, onCancel, showWikiSuggestions, showStackSuggestions, wikiSuggestions, wikiSuggestionIndex, stackSuggestions, stackSuggestionIndex, isEditingBody, showDeleteConfirm, title, type, dueDate, stacks, createdAt, completed, isPinned, initialCard?.id, onSave]);
+  }, [body, onCancel, showWikiSuggestions, showStackSuggestions, wikiSuggestions, wikiSuggestionIndex, stackSuggestions, stackSuggestionIndex, isEditingBody, showDeleteConfirm, title, type, dueDate, stacks, createdAt, completed, isPinned, initialCard, onSave]);
 
   const insertTimestamp = () => {
     if (!bodyRef.current) return;
