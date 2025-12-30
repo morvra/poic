@@ -408,8 +408,6 @@ export default function App() {
         const decoded = decodeURIComponent(atob(importData));
         const cardData = JSON.parse(decoded);
         
-        console.log('Importing card from CardBoard:', cardData); // デバッグ用
-        
         // カードを追加
         const newCard: Card = {
           id: generateId(),
@@ -424,10 +422,7 @@ export default function App() {
           completed: false
         };
         
-        console.log('New card created:', newCard); // デバッグ用
-        
         setCards(prev => {
-          console.log('Adding card to existing cards:', prev.length); // デバッグ用
           return [newCard, ...prev];
         });
         
@@ -442,7 +437,6 @@ export default function App() {
         
         // カードを自動で開く
         setTimeout(() => {
-          console.log('Opening card:', newCard.id); // デバッグ用
           setActiveModalCardId(newCard.id);
         }, 300); // 少し長めに待つ
         
