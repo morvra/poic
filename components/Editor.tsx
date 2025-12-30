@@ -318,6 +318,74 @@ export const Editor: React.FC<EditorProps> = ({
           return;
       }
 
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && bodyRef.current && document.activeElement === bodyRef.current) {
+        e.preventDefault();
+        
+        const textarea = bodyRef.current;
+        const text = textarea.value;
+        const cursorPos = textarea.selectionStart;
+        
+        // 現在の行を特定
+        const lines = text.split('\n');
+        let currentLineIndex = 0;
+        let charCount = 0;
+        
+        for (let i = 0; i < lines.length; i++) {
+          charCount += lines[i].length + 1;
+          if (charCount > cursorPos) {
+            currentLineIndex = i;
+            break;
+          }
+        }
+        
+        const currentLine = lines[currentLineIndex];
+        
+        if (e.key === 'ArrowRight') {
+          // インデント追加（2スペース）
+          lines[currentLineIndex] = '  ' + currentLine;
+          const newText = lines.join('\n');
+          setBody(newText);
+          
+          setTimeout(() => {
+            if (textarea) {
+              const newPos = cursorPos + 2;
+              textarea.setSelectionRange(newPos, newPos);
+              textarea.focus();
+            }
+          }, 0);
+          
+        } else if (e.key === 'ArrowLeft') {
+          // インデント削除（最大2スペース）
+          if (currentLine.startsWith('  ')) {
+            lines[currentLineIndex] = currentLine.substring(2);
+            const newText = lines.join('\n');
+            setBody(newText);
+            
+            setTimeout(() => {
+              if (textarea) {
+                const newPos = Math.max(cursorPos - 2, 0);
+                textarea.setSelectionRange(newPos, newPos);
+                textarea.focus();
+              }
+            }, 0);
+          } else if (currentLine.startsWith(' ')) {
+            // 1スペースだけの場合も削除
+            lines[currentLineIndex] = currentLine.substring(1);
+            const newText = lines.join('\n');
+            setBody(newText);
+            
+            setTimeout(() => {
+              if (textarea) {
+                const newPos = Math.max(cursorPos - 1, 0);
+                textarea.setSelectionRange(newPos, newPos);
+                textarea.focus();
+              }
+            }, 0);
+          }
+        }
+        return;
+      }
+
       if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && bodyRef.current && document.activeElement === bodyRef.current) {
         e.preventDefault();
         
