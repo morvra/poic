@@ -966,6 +966,53 @@ export default function App() {
     if (activeSideCardId === id) handleCloseSide();
   };
 
+  const handleCreateHubCard = () => {
+    if (selectedCardIds.size === 0) {
+      alert('カードを選択してください');
+      return;
+    }
+    
+    // 選択されたカードを取得して作成日順にソート
+    const selectedCards = cards
+      .filter(c => selectedCardIds.has(c.id))
+      .sort((a, b) => a.createdAt - b.createdAt); // 古い順
+    
+    // 本文にリンクをリスト形式で並べる
+    const body = selectedCards
+      .map(card => `- [[${card.title}]]`)
+      .join('\n');
+    
+    // 新しいカードを作成
+    const newCard: Card = {
+      id: generateId(),
+      type: CardType.Discovery,
+      title: `Hub: ${new Date().toLocaleDateString('ja-JP')}`,
+      body: body,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      stacks: ['Hub'],
+      isDeleted: false,
+      isPinned: false,
+      completed: false
+    };
+    
+    setCards(prev => [newCard, ...prev]);
+    
+    // 同期メタデータに追加
+    setSyncMetadata(prev => ({
+      ...prev,
+      localChanges: [...new Set([...prev.localChanges, newCard.id])]
+    }));
+    
+    // 選択モードを解除して、新しいカードを開く
+    setIsSelectionMode(false);
+    setSelectedCardIds(new Set());
+    
+    setTimeout(() => {
+      setActiveModalCardId(newCard.id);
+    }, 100);
+  };
+
   const handleToggleSelection = () => { setIsSelectionMode(!isSelectionMode); setSelectedCardIds(new Set()); setShowBatchDeleteConfirm(false); setShowBatchTagModal(false); };
   const handleSelectCard = (id: string) => { const newSelection = new Set(selectedCardIds); if (newSelection.has(id)) newSelection.delete(id); else newSelection.add(id); setSelectedCardIds(newSelection); };
   const handleClickDeleteSelected = () => { if (selectedCardIds.size === 0) return; setShowBatchDeleteConfirm(true); };
@@ -1146,6 +1193,14 @@ return (
                                           className="bg-stone-700 hover:bg-stone-800 text-white p-2 rounded-full transition-colors"
                                       >
                                           <Tag size={20} />
+                                      </button>
+
+                                      <button 
+                                        onClick={handleCreateHubCard} 
+                                        title="Hubカードを作成" 
+                                        className="bg-purple-600 hover:bg-purple-700 text-white p-2 rounded-full transition-colors"
+                                      >
+                                        <Layers size={20} />
                                       </button>
                                       
                                       <button 
