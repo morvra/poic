@@ -986,7 +986,7 @@ export default function App() {
     const newCard: Card = {
       id: generateId(),
       type: CardType.Discovery,
-      title: `Hub: ${new Date().toLocaleDateString('ja-JP')}`,
+      title: `Hub: ${formatTimestampByPattern(new Date(), dateFormat)}`,
       body: body,
       createdAt: Date.now(),
       updatedAt: Date.now(),
