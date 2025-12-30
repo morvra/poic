@@ -1129,6 +1129,7 @@ return (
                       onNavigate={(term, e) => handleLinkClick(term, e)} 
                       backlinks={modalBacklinks} 
                       onMoveToSide={() => handleMoveToSide(activeModalCard.id)}
+                      onRequestClose={handleCloseModal}
                   />
               </div>
           </div>

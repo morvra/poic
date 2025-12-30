@@ -18,6 +18,7 @@ interface EditorProps {
   onNavigate: (term: string, e?: React.MouseEvent) => void;
   onMoveToSide?: () => void;
   backlinks?: Card[];
+  onRequestClose?: () => void;
 }
 
 const TypeIcon = ({ type, className }: { type: CardType, className?: string }) => {
@@ -40,7 +41,8 @@ export const Editor: React.FC<EditorProps> = ({
   onDelete, 
   onNavigate, 
   onMoveToSide,
-  backlinks = [] 
+  backlinks = [],
+  onRequestClose
 }) => {
   // state
   const [type, setType] = useState<CardType>(initialCard?.type || CardType.Record);
