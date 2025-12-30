@@ -412,6 +412,7 @@ export const Editor: React.FC<EditorProps> = ({
           }
           return;
         }
+      }
 
       if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && bodyRef.current && document.activeElement === bodyRef.current) {
         e.preventDefault();
@@ -528,7 +529,7 @@ export const Editor: React.FC<EditorProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [body, onCancel, showWikiSuggestions, showStackSuggestions, wikiSuggestions, wikiSuggestionIndex, stackSuggestions, stackSuggestionIndex, isEditingBody, showDeleteConfirm, title, type, dueDate, stacks, createdAt, completed, isPinned, initialCard, onSave]);
+  }, [body, onCancel, showWikiSuggestions, showStackSuggestions, wikiSuggestions, wikiSuggestionIndex, stackSuggestions, stackSuggestionIndex, isEditingBody, showDeleteConfirm, title, type, dueDate, stacks, createdAt, completed, isPinned, initialCard?.id, onSave]);
 
   const insertTimestamp = () => {
     if (!bodyRef.current) return;
