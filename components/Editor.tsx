@@ -58,9 +58,13 @@ export const Editor: React.FC<EditorProps> = ({
   const [completed, setCompleted] = useState(initialCard?.completed || false);
   const [isPinned, setIsPinned] = useState<number | boolean | undefined>(initialCard?.isPinned);
   
-  const [isEditingBody, setIsEditingBody] = useState(
-    !initialCard || !initialCard.id || initialCard.id.startsWith('new-') || initialCard.id.startsWith('phantom-')
-  );
+  const [isEditingBody, setIsEditingBody] = useState(() => {
+    if (!initialCard) return true;
+    if (!initialCard.id) return true;
+    if (initialCard.id.startsWith('new-')) return true;
+    if (initialCard.id.startsWith('phantom-')) return true;
+    return false;
+  });
   const [initialCursorOffset, setInitialCursorOffset] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -176,18 +180,36 @@ export const Editor: React.FC<EditorProps> = ({
 
   useEffect(() => {
       if (isEditingBody && bodyRef.current) {
+          const currentScrollTop = bodyRef.current.scrollTop;
           bodyRef.current.style.height = 'auto';
           bodyRef.current.style.height = `${bodyRef.current.scrollHeight}px`;
-          
-          const isNewCard = initialCard?.id?.startsWith('new-');
-          const isPhantom = (isNewCard || !initialCard?.id) && !!initialCard?.title;
-          const isExplicitEdit = !!initialCard?.id && !isNewCard;
-          const isTabFocus = document.activeElement === readViewRef.current;
-          if (isPhantom || isExplicitEdit || isTabFocus) {
-              bodyRef.current.focus();
-          }
+          bodyRef.current.scrollTop = currentScrollTop;
       }
   }, [body, isEditingBody]);
+
+  useEffect(() => {
+      // 編集モードに入った瞬間だけフォーカスとカーソル位置を設定
+      if (isEditingBody && bodyRef.current) {
+          const isNewCard = !initialCard?.id || initialCard.id.startsWith('new-');
+          const isPhantom = initialCard?.id?.startsWith('phantom-');
+          
+          // 新規カードまたはphantomカードの場合はフォーカス
+          if (isNewCard || isPhantom) {
+              bodyRef.current.focus();
+          }
+          // initialCursorOffsetが設定されている場合はカーソル位置を復元
+          if (initialCursorOffset !== null) {
+              const len = bodyRef.current.value.length;
+              const pos = Math.min(Math.max(0, initialCursorOffset), len);
+              bodyRef.current.setSelectionRange(pos, pos);
+              setInitialCursorOffset(null);
+          }
+          if (savedScrollTop.current !== null && containerRef.current) {
+              containerRef.current.scrollTop = savedScrollTop.current;
+              savedScrollTop.current = null;
+          }
+      }
+  }, [isEditingBody]);
 
   useEffect(() => {
       const currentId = initialCard?.id;
@@ -314,7 +336,70 @@ export const Editor: React.FC<EditorProps> = ({
             return;
         }
 
+        // Ctrl+左右でインデント調整
         if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && bodyRef.current && document.activeElement === bodyRef.current) {
+          e.preventDefault();
+          
+          const textarea = bodyRef.current;
+          const cursorPos = textarea.selectionStart;
+          const text = textarea.value;
+          
+          // スクロール位置を保存
+          const scrollTop = textarea.scrollTop;
+          
+          // 現在の行の開始位置を計算
+          const beforeCursor = text.substring(0, cursorPos);
+          const currentLineStart = beforeCursor.lastIndexOf('\n') + 1;
+          
+          if (e.key === 'ArrowRight') {
+            // インデント追加（2スペース）
+            const newText = text.substring(0, currentLineStart) + '  ' + text.substring(currentLineStart);
+            const newPos = cursorPos + 2;
+            
+            setBody(newText);
+            
+            // レンダリング後にカーソルとスクロール位置を復元
+            requestAnimationFrame(() => {
+              if (bodyRef.current) {
+                bodyRef.current.setSelectionRange(newPos, newPos);
+                bodyRef.current.scrollTop = scrollTop;
+              }
+            });
+            
+          } else if (e.key === 'ArrowLeft') {
+            const currentLineEnd = text.indexOf('\n', currentLineStart);
+            const lineEnd = currentLineEnd === -1 ? text.length : currentLineEnd;
+            const currentLine = text.substring(currentLineStart, lineEnd);
+            
+            let removedChars = 0;
+            let newText = text;
+            
+            if (currentLine.startsWith('  ')) {
+              newText = text.substring(0, currentLineStart) + text.substring(currentLineStart + 2);
+              removedChars = 2;
+            } else if (currentLine.startsWith(' ')) {
+              newText = text.substring(0, currentLineStart) + text.substring(currentLineStart + 1);
+              removedChars = 1;
+            }
+            
+            if (removedChars > 0) {
+              const newPos = Math.max(cursorPos - removedChars, currentLineStart);
+              
+              setBody(newText);
+              
+              requestAnimationFrame(() => {
+                if (bodyRef.current) {
+                  bodyRef.current.setSelectionRange(newPos, newPos);
+                  bodyRef.current.scrollTop = scrollTop;
+                }
+              });
+            }
+          }
+          return;
+        }
+
+        // Ctrl+上下で行入れ替え
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && bodyRef.current && document.activeElement === bodyRef.current) {
           e.preventDefault();
           
           const textarea = bodyRef.current;
@@ -337,88 +422,6 @@ export const Editor: React.FC<EditorProps> = ({
             }
           }
           
-          if (e.key === 'ArrowRight') {
-            // インデント追加（2スペース）
-            const beforeCursor = text.substring(0, cursorPos);
-            const currentLineStart = beforeCursor.lastIndexOf('\n') + 1;
-            
-            // テキストを再構築
-            const newText = text.substring(0, currentLineStart) + '  ' + text.substring(currentLineStart);
-            const newPos = cursorPos + 2;
-            
-            // Reactの状態を更新
-            setBody(newText);
-            
-            // 次のレンダリングサイクルでカーソル位置とスクロール位置を復元
-            requestAnimationFrame(() => {
-              if (bodyRef.current) {
-                bodyRef.current.setSelectionRange(newPos, newPos);
-                bodyRef.current.scrollTop = scrollTop;
-              }
-            });
-            
-            return;
-            
-          } else if (e.key === 'ArrowLeft') {
-            const beforeCursor = text.substring(0, cursorPos);
-            const currentLineStart = beforeCursor.lastIndexOf('\n') + 1;
-            const currentLineEnd = text.indexOf('\n', currentLineStart);
-            const lineEnd = currentLineEnd === -1 ? text.length : currentLineEnd;
-            const currentLine = text.substring(currentLineStart, lineEnd);
-            
-            let removedChars = 0;
-            let newText = text;
-            
-            if (currentLine.startsWith('  ')) {
-              newText = text.substring(0, currentLineStart) + text.substring(currentLineStart + 2);
-              removedChars = 2;
-            } else if (currentLine.startsWith(' ')) {
-              newText = text.substring(0, currentLineStart) + text.substring(currentLineStart + 1);
-              removedChars = 1;
-            }
-            
-            if (removedChars > 0) {
-              const newPos = Math.max(cursorPos - removedChars, currentLineStart);
-              
-              // Reactの状態を更新
-              setBody(newText);
-              
-              // 次のレンダリングサイクルでカーソル位置とスクロール位置を復元
-              requestAnimationFrame(() => {
-                if (bodyRef.current) {
-                  bodyRef.current.setSelectionRange(newPos, newPos);
-                  bodyRef.current.scrollTop = scrollTop;
-                }
-              });
-            }
-            return;
-          }
-        }
-
-        if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && bodyRef.current && document.activeElement === bodyRef.current) {
-          e.preventDefault();
-          
-          const textarea = bodyRef.current;
-          const text = textarea.value;
-          const cursorPos = textarea.selectionStart;
-          
-          // スクロール位置を保存
-          const scrollTop = textarea.scrollTop;
-          
-          // 現在の行を特定
-          const lines = text.split('\n');
-          let currentLineIndex = 0;
-          let charCount = 0;
-          
-          for (let i = 0; i < lines.length; i++) {
-            charCount += lines[i].length + 1; // +1 for \n
-            if (charCount > cursorPos) {
-              currentLineIndex = i;
-              break;
-            }
-          }
-          
-          // 入れ替え処理
           if (e.key === 'ArrowUp' && currentLineIndex > 0) {
             // 上の行と入れ替え
             const temp = lines[currentLineIndex];
@@ -428,10 +431,8 @@ export const Editor: React.FC<EditorProps> = ({
             const newText = lines.join('\n');
             const newPos = cursorPos - lines[currentLineIndex].length - 1;
             
-            // Reactの状態を更新
             setBody(newText);
             
-            // 次のレンダリングサイクルでカーソル位置とスクロール位置を復元
             requestAnimationFrame(() => {
               if (bodyRef.current) {
                 bodyRef.current.setSelectionRange(newPos, newPos);
@@ -448,10 +449,8 @@ export const Editor: React.FC<EditorProps> = ({
             const newText = lines.join('\n');
             const newPos = cursorPos + lines[currentLineIndex].length + 1;
             
-            // Reactの状態を更新
             setBody(newText);
             
-            // 次のレンダリングサイクルでカーソル位置とスクロール位置を復元
             requestAnimationFrame(() => {
               if (bodyRef.current) {
                 bodyRef.current.setSelectionRange(newPos, newPos);
@@ -463,6 +462,7 @@ export const Editor: React.FC<EditorProps> = ({
           return;
         }
 
+        // Ctrl+Enterで保存して閉じる
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
           e.preventDefault();
           
@@ -485,6 +485,8 @@ export const Editor: React.FC<EditorProps> = ({
           }, true);
           return;
         }
+
+        // Alt+Tでタイムスタンプ挿入
         if (e.altKey && e.key.toLowerCase() === 't') {
           e.preventDefault();
           if (!isEditingBody) {
@@ -495,6 +497,8 @@ export const Editor: React.FC<EditorProps> = ({
               insertTimestamp();
           }
         }
+
+        // Wiki補完
         if (showWikiSuggestions) {
             if (e.key === 'ArrowDown') { e.preventDefault(); setWikiSuggestionIndex(prev => (prev + 1) % wikiSuggestions.length); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); setWikiSuggestionIndex(prev => (prev - 1 + wikiSuggestions.length) % wikiSuggestions.length); }
@@ -502,6 +506,8 @@ export const Editor: React.FC<EditorProps> = ({
             else if (e.key === 'Escape') { setShowWikiSuggestions(false); e.stopPropagation(); }
             return;
         }
+
+        // Tag補完
         if (showStackSuggestions) {
             if (e.key === 'ArrowDown') { e.preventDefault(); setStackSuggestionIndex(prev => (prev + 1) % stackSuggestions.length); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); setStackSuggestionIndex(prev => (prev - 1 + stackSuggestions.length) % stackSuggestions.length); }
@@ -509,6 +515,8 @@ export const Editor: React.FC<EditorProps> = ({
             else if (e.key === 'Escape') { setShowStackSuggestions(false); e.stopPropagation(); }
             return;
         }
+
+        // Escapeで閉じる
         if (e.key === 'Escape' && !showDeleteConfirm) {
           handleClose();
         } else if (e.key === 'Escape' && showDeleteConfirm) {
