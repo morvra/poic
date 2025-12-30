@@ -394,6 +394,52 @@ export default function App() {
     }
   }, [isLoading]);
 
+  // import from CardBoard
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const importData = params.get('import');
+    
+    if (importData) {
+      try {
+        // Base64デコード
+        const decoded = decodeURIComponent(atob(importData));
+        const cardData = JSON.parse(decoded);
+        
+        // カードを追加
+        const newCard = {
+          id: generateId(),
+          type: cardData.type || CardType.Discovery,
+          title: cardData.title || '無題',
+          body: cardData.body || '',
+          createdAt: cardData.createdAt || Date.now(),
+          updatedAt: Date.now(),
+          stacks: cardData.stacks || [],
+          isDeleted: false,
+          isPinned: false
+        };
+        
+        setCards(prev => [newCard, ...prev]);
+        
+        // 同期メタデータに追加
+        setSyncMetadata(prev => ({
+          ...prev,
+          localChanges: [...new Set([...prev.localChanges, newCard.id])]
+        }));
+        
+        // URLパラメータをクリーン
+        window.history.replaceState({}, '', window.location.pathname);
+        
+        // カードを自動で開く
+        setTimeout(() => {
+          setActiveModalCardId(newCard.id);
+        }, 100);
+        
+      } catch(err) {
+        console.error('Failed to import card from CardBoard:', err);
+      }
+    }
+  }, []); // 空の依存配列で初回のみ実行
+
   useEffect(() => {
     if (isLoading) return; // 初期化中はスキップ
     idbStorage.setItem('poic-cards', JSON.stringify(cards)).catch(err => {
