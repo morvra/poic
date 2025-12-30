@@ -317,6 +317,68 @@ export const Editor: React.FC<EditorProps> = ({
       if (!containerRef.current?.contains(document.activeElement)) {
           return;
       }
+      
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && bodyRef.current && document.activeElement === bodyRef.current) {
+        e.preventDefault();
+        
+        const textarea = bodyRef.current;
+        const text = textarea.value;
+        const cursorPos = textarea.selectionStart;
+        
+        // 現在の行を特定
+        const lines = text.split('\n');
+        let currentLineIndex = 0;
+        let charCount = 0;
+        
+        for (let i = 0; i < lines.length; i++) {
+          charCount += lines[i].length + 1; // +1 for \n
+          if (charCount > cursorPos) {
+            currentLineIndex = i;
+            break;
+          }
+        }
+        
+        // 入れ替え処理
+        if (e.key === 'ArrowUp' && currentLineIndex > 0) {
+          // 上の行と入れ替え
+          const temp = lines[currentLineIndex];
+          lines[currentLineIndex] = lines[currentLineIndex - 1];
+          lines[currentLineIndex - 1] = temp;
+          
+          const newText = lines.join('\n');
+          setBody(newText);
+          
+          // カーソル位置を調整
+          setTimeout(() => {
+            if (textarea) {
+              const newPos = cursorPos - lines[currentLineIndex].length - 1;
+              textarea.setSelectionRange(newPos, newPos);
+              textarea.focus();
+            }
+          }, 0);
+          
+        } else if (e.key === 'ArrowDown' && currentLineIndex < lines.length - 1) {
+          // 下の行と入れ替え
+          const temp = lines[currentLineIndex];
+          lines[currentLineIndex] = lines[currentLineIndex + 1];
+          lines[currentLineIndex + 1] = temp;
+          
+          const newText = lines.join('\n');
+          setBody(newText);
+          
+          // カーソル位置を調整
+          setTimeout(() => {
+            if (textarea) {
+              const newPos = cursorPos + lines[currentLineIndex].length + 1;
+              textarea.setSelectionRange(newPos, newPos);
+              textarea.focus();
+            }
+          }, 0);
+        }
+        
+        return;
+      }
+
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         
