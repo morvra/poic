@@ -396,6 +396,9 @@ export default function App() {
 
   // import from CardBoard
   useEffect(() => {
+    // isLoadingがtrueの間は処理をスキップ
+    if (isLoading) return;
+    
     const params = new URLSearchParams(window.location.search);
     const importData = params.get('import');
     
@@ -405,8 +408,10 @@ export default function App() {
         const decoded = decodeURIComponent(atob(importData));
         const cardData = JSON.parse(decoded);
         
+        console.log('Importing card from CardBoard:', cardData); // デバッグ用
+        
         // カードを追加
-        const newCard = {
+        const newCard: Card = {
           id: generateId(),
           type: cardData.type || CardType.Discovery,
           title: cardData.title || '無題',
@@ -415,10 +420,16 @@ export default function App() {
           updatedAt: Date.now(),
           stacks: cardData.stacks || [],
           isDeleted: false,
-          isPinned: false
+          isPinned: false,
+          completed: false
         };
         
-        setCards(prev => [newCard, ...prev]);
+        console.log('New card created:', newCard); // デバッグ用
+        
+        setCards(prev => {
+          console.log('Adding card to existing cards:', prev.length); // デバッグ用
+          return [newCard, ...prev];
+        });
         
         // 同期メタデータに追加
         setSyncMetadata(prev => ({
@@ -431,14 +442,16 @@ export default function App() {
         
         // カードを自動で開く
         setTimeout(() => {
+          console.log('Opening card:', newCard.id); // デバッグ用
           setActiveModalCardId(newCard.id);
-        }, 100);
+        }, 300); // 少し長めに待つ
         
       } catch(err) {
         console.error('Failed to import card from CardBoard:', err);
+        alert('CardBoardからのインポートに失敗しました: ' + err);
       }
     }
-  }, []); // 空の依存配列で初回のみ実行
+  }, [isLoading]); // isLoadingを依存配列に追加
 
   useEffect(() => {
     if (isLoading) return; // 初期化中はスキップ
