@@ -180,12 +180,18 @@ export const Editor: React.FC<EditorProps> = ({
 
   useEffect(() => {
       if (isEditingBody && bodyRef.current) {
-          const currentScrollTop = bodyRef.current.scrollTop;
+          // スクロール位置を保存（containerRefの方）
+          const scrollTop = containerRef.current?.scrollTop || 0;
+          
           bodyRef.current.style.height = 'auto';
           bodyRef.current.style.height = `${bodyRef.current.scrollHeight}px`;
-          bodyRef.current.scrollTop = currentScrollTop;
+          
+          // スクロール位置を復元（containerRefに対して）
+          if (containerRef.current) {
+              containerRef.current.scrollTop = scrollTop;
+          }
       }
-  }, [body, isEditingBody]);
+  }, [isEditingBody]);
 
   useEffect(() => {
       // 編集モードに入った瞬間だけフォーカスとカーソル位置を設定
@@ -564,6 +570,16 @@ export const Editor: React.FC<EditorProps> = ({
   const handleBodyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const val = e.target.value;
       setBody(val);
+      
+      if (bodyRef.current) {
+          const scrollTop = containerRef.current?.scrollTop || 0;
+          bodyRef.current.style.height = 'auto';
+          bodyRef.current.style.height = `${bodyRef.current.scrollHeight}px`;
+          if (containerRef.current) {
+              containerRef.current.scrollTop = scrollTop;
+          }
+      }
+      
       const cursor = e.target.selectionStart;
       const textBeforeCursor = val.substring(0, cursor);
       const match = textBeforeCursor.match(/\[\[([^\]]*)$/);
