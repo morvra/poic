@@ -1345,6 +1345,7 @@ return (
                           ) : (
                               <>
                                   {unpinnedCards.map((card, index) => {
+                                      const prevCard = unpinnedCards[index - 1];
                                       const currentTimestamp = sortOrder.startsWith('updated') ? card.updatedAt : card.createdAt;
                                       const prevTimestamp = prevCard ? (sortOrder.startsWith('updated') ? prevCard.updatedAt : prevCard.createdAt) : null;
                                       const currentMonth = new Date(currentTimestamp).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit' });
