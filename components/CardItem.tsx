@@ -1,12 +1,13 @@
 import React from 'react';
-import { Card, CardType } from '../types';
+import { Card, CardType, SortOrder } from '../types';
 import { formatTimestampByPattern, formatDateWithDay } from '../utils';
 import { CardRenderer } from './CardRenderer';
 import { Clock, CheckCircle, Circle, FileText, Lightbulb, CheckSquare, BookOpen, Square, Trash2, Pin } from 'lucide-react';
 
 interface CardItemProps {
   card: Card;
-  dateFormat: string; 
+  dateFormat: string;
+  sortOrder?: SortOrder;
   onClick: (card: Card, e: React.MouseEvent) => void; 
   onLinkClick: (term: string) => void;
   onToggleComplete?: (id: string) => void;
@@ -51,13 +52,24 @@ const TypeIcon = ({ type, className }: { type: CardType, className?: string }) =
 };
 
 export const CardItem: React.FC<CardItemProps> = ({ 
-  card, dateFormat, onClick, onLinkClick, onToggleComplete, onStackClick, onTogglePin, style, domId,
-  isSelectionMode, isSelected, onSelect
+  card, 
+  dateFormat, 
+  sortOrder,
+  onClick, 
+  onLinkClick, 
+  onToggleComplete, 
+  onStackClick, 
+  onTogglePin, 
+  style, 
+  domId,
+  isSelectionMode, 
+  isSelected, 
+  onSelect
 }) => {
   const isGTD = card.type === CardType.GTD;
   const typeBadgeClass = TYPE_COLORS_BG[card.type];
   const borderClass = TYPE_BORDER_COLOR[card.type];
-
+  const displayTimestamp = sortOrder?.startsWith('updated') ? card.updatedAt : card.createdAt;
   const handleClick = (e: React.MouseEvent) => {
     if (isSelectionMode && onSelect) {
       e.preventDefault();
@@ -125,7 +137,7 @@ export const CardItem: React.FC<CardItemProps> = ({
         <div className="flex flex-wrap items-center gap-3 text-[13px] text-stone-400 font-mono mb-2 leading-none">
              <span className="flex items-center gap-1">
                 <Clock size={12} />
-                {formatTimestampByPattern(new Date(card.createdAt), dateFormat)}
+                {formatTimestampByPattern(new Date(displayTimestamp), dateFormat)}
              </span>
              {isGTD && card.dueDate && (
                 <span className={`flex items-center gap-1 ${card.dueDate < Date.now() && !card.completed ? 'text-red-500 font-bold' : ''}`}>
