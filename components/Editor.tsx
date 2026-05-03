@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { Card, CardType } from '../types';
 import { formatTimeShort, formatTimestampByPattern } from '../utils';
 import { CardRenderer } from './CardRenderer';
@@ -20,6 +20,9 @@ interface EditorProps {
   backlinks?: Card[];
   onRequestClose?: () => void;
 }
+export interface EditorHandle {
+  flushSave: () => void;
+}
 
 const TypeIcon = ({ type, className }: { type: CardType, className?: string }) => {
     switch (type) {
@@ -30,7 +33,7 @@ const TypeIcon = ({ type, className }: { type: CardType, className?: string }) =
     }
 };
 
-export const Editor: React.FC<EditorProps> = ({ 
+export const Editor = forwardRef<EditorHandle, EditorProps>(({ 
   initialCard, 
   allTitles, 
   allCards, 
@@ -43,7 +46,7 @@ export const Editor: React.FC<EditorProps> = ({
   onMoveToSide,
   backlinks = [],
   onRequestClose
-}) => {
+}, ref) => {
   // state
   const [type, setType] = useState<CardType>(initialCard?.type || CardType.Record);
   const [title, setTitle] = useState(initialCard?.title || '');
@@ -78,8 +81,18 @@ export const Editor: React.FC<EditorProps> = ({
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMouseDownRef = useRef(false); 
   const savedScrollTop = useRef<number | null>(null);
-  
   const prevCardIdRef = useRef<string | undefined>(initialCard?.id);
+
+  // 外部から強制保存を呼び出せるようにする
+  useImperativeHandle(ref, () => ({
+    flushSave: () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      handleAutoSave();
+    }
+  }));
 
   const [wikiSuggestions, setWikiSuggestions] = useState<string[]>([]);
   const [showWikiSuggestions, setShowWikiSuggestions] = useState(false);
@@ -155,7 +168,7 @@ export const Editor: React.FC<EditorProps> = ({
       };
     });
   }, [backlinks, allCards]);
-
+  
   useEffect(() => {
     if (containerRef.current) {
         containerRef.current.scrollTop = 0;
@@ -1088,4 +1101,4 @@ export const Editor: React.FC<EditorProps> = ({
       </div>
     </div>
   );
-};
+});

@@ -6,6 +6,7 @@ import type { SyncMetadata } from './types';
 import { idbStorage, migrateFromLocalStorage } from './utils/indexedDB';
 import { CardItem } from './components/CardItem';
 import { Editor } from './components/Editor';
+import type { EditorHandle } from './components/Editor';
 import { SettingsModal } from './components/SettingsModal'; 
 import { 
   Library, 
@@ -102,6 +103,8 @@ export default function App() {
     lastSyncTime: 0,
     localChanges: []
   });
+  const modalEditorRef = useRef<EditorHandle>(null);
+  const sideEditorRef = useRef<EditorHandle>(null);
 
   // --- Memos ---
   const getCardData = (id: string | null): Card | undefined => {
@@ -519,8 +522,62 @@ export default function App() {
   }, [syncMetadata.localChanges, dropboxToken, isLoading]);
   useEffect(() => { 
     const handleKeyDown = (e: KeyboardEvent) => { 
-      // エディターやサイドバーが開いている時、入力フィールドにフォーカスがある時はスキップ
+      // 編集中（INPUT/TEXTAREA にフォーカスあり）はスキップ
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return; 
+
+      // ─────────────────────────────────────────────
+      // j / k / r : カードが開いているとき前後・ランダムに移動
+      // ─────────────────────────────────────────────
+      const openCardId = activeModalCardId || activeSideCardId;
+      if ((e.key === 'j' || e.key === 'k' || e.key === 'r') && openCardId) {
+        // 新規作成中・phantom カードでは移動しない
+        if (openCardId.startsWith('new-') || openCardId.startsWith('phantom-')) return;
+
+        e.preventDefault();
+
+        // 切り替え前に現在の編集内容を強制保存
+        if (activeModalCardId) {
+          modalEditorRef.current?.flushSave();
+        } else {
+          sideEditorRef.current?.flushSave();
+        }
+
+        // 表示順：ピン留め → 通常カード
+        const orderedCards = [...pinnedCards, ...unpinnedCards];
+        const currentIndex = orderedCards.findIndex(c => c.id === openCardId);
+        if (currentIndex === -1) return;
+
+        let nextIndex: number;
+
+        if (e.key === 'r') {
+          // ランダム移動（現在のカードは除外）
+          if (orderedCards.length <= 1) return;
+          const candidates = orderedCards
+            .map((_, i) => i)
+            .filter(i => i !== currentIndex);
+          nextIndex = candidates[Math.floor(Math.random() * candidates.length)];
+        } else {
+          // j: 次、k: 前
+          nextIndex =
+            e.key === 'j'
+              ? Math.min(currentIndex + 1, orderedCards.length - 1)
+              : Math.max(currentIndex - 1, 0);
+          if (nextIndex === currentIndex) return;
+        }
+
+        const nextCard = orderedCards[nextIndex];
+
+        if (activeModalCardId) {
+          setActiveModalCardId(nextCard.id);
+        } else {
+          setActiveSideCardId(nextCard.id);
+        }
+        return;
+      }
+
+      // ─────────────────────────────────────────────
+      // 以下は既存の処理（カードが開いているときはスキップ）
+      // ─────────────────────────────────────────────
       if (activeModalCardId) return;
 
       // n: 新規カード作成
@@ -549,7 +606,7 @@ export default function App() {
     }; 
     window.addEventListener('keydown', handleKeyDown); 
     return () => window.removeEventListener('keydown', handleKeyDown); 
-  }, [activeModalCardId, activeSideCardId, isDropboxConnected, viewMode, searchQuery, activeStack, activeType]);
+  }, [activeModalCardId, activeSideCardId, isDropboxConnected, viewMode, searchQuery, activeStack, activeType, pinnedCards, unpinnedCards]);
 
   const handleDateFormatChange = (format: string) => {
     setDateFormat(format);
@@ -1115,22 +1172,23 @@ return (
           >
               <div className="w-full max-w-2xl h-auto max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl bg-paper pointer-events-auto">
                   <Editor 
-                      initialCard={activeModalCard}
-                      allTitles={allTitles}
-                      allCards={cards}
-                      availableStacks={allStacks.map(s => s.name)}
-                      dateFormat={dateFormat}
-                      onSave={(data, close) => {
-                          handleSaveCard(data);
-                          if (close) handleCloseModal();
-                      }}
-                      onCancel={handleCloseModal}
-                      onDelete={() => handleDeleteCard(activeModalCard.id)}
-                      onNavigate={(term, e) => handleLinkClick(term, e)} 
-                      backlinks={modalBacklinks} 
-                      onMoveToSide={() => handleMoveToSide(activeModalCard.id)}
-                      onRequestClose={handleCloseModal}
-                  />
+                    ref={modalEditorRef}
+                    initialCard={activeModalCard}
+                    allTitles={allTitles}
+                    allCards={cards}
+                    availableStacks={allStacks.map(s => s.name)}
+                    dateFormat={dateFormat}
+                    onSave={(data, close) => {
+                        handleSaveCard(data);
+                        if (close) handleCloseModal();
+                    }}
+                    onCancel={handleCloseModal}
+                    onDelete={() => handleDeleteCard(activeModalCard.id)}
+                    onNavigate={(term, e) => handleLinkClick(term, e)} 
+                    backlinks={modalBacklinks} 
+                    onMoveToSide={() => handleMoveToSide(activeModalCard.id)}
+                    onRequestClose={handleCloseModal}
+                />
               </div>
           </div>
       )}
@@ -1368,20 +1426,21 @@ return (
             <aside className="w-full md:w-[500px] md:flex-none border-l border-stone-300 bg-paper shadow-xl z-40 overflow-hidden transition-all duration-200 ease-in-out h-screen">
                 <div className="h-full">
                     <Editor 
-                        initialCard={activeSideCard}
-                        allTitles={allTitles}
-                        allCards={cards}
-                        availableStacks={allStacks.map(s => s.name)}
-                        dateFormat={dateFormat}
-                        onSave={(data, close) => {
-                            handleSaveCard(data);
-                            if (close) handleCloseSide();
-                        }}
-                        onCancel={handleCloseSide}
-                        onDelete={() => handleDeleteCard(activeSideCard.id)}
-                        onNavigate={(term, e) => handleLinkClick(term, e)} 
-                        backlinks={sideBacklinks}
-                    />
+                      ref={sideEditorRef}
+                      initialCard={activeSideCard}
+                      allTitles={allTitles}
+                      allCards={cards}
+                      availableStacks={allStacks.map(s => s.name)}
+                      dateFormat={dateFormat}
+                      onSave={(data, close) => {
+                          handleSaveCard(data);
+                          if (close) handleCloseSide();
+                      }}
+                      onCancel={handleCloseSide}
+                      onDelete={() => handleDeleteCard(activeSideCard.id)}
+                      onNavigate={(term, e) => handleLinkClick(term, e)} 
+                      backlinks={sideBacklinks}
+                  />
                 </div>
             </aside>
           )}
