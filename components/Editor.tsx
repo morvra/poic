@@ -22,6 +22,7 @@ interface EditorProps {
 }
 export interface EditorHandle {
   flushSave: () => void;
+  triggerClose: () => void;
 }
 
 const TypeIcon = ({ type, className }: { type: CardType, className?: string }) => {
@@ -83,7 +84,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
   const savedScrollTop = useRef<number | null>(null);
   const prevCardIdRef = useRef<string | undefined>(initialCard?.id);
 
-  // 外部から強制保存を呼び出せるようにする
+  // 外部から強制保存・クローズを呼び出せるようにする
   useImperativeHandle(ref, () => ({
     flushSave: () => {
       if (saveTimeoutRef.current) {
@@ -91,6 +92,9 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
         saveTimeoutRef.current = null;
       }
       handleAutoSave();
+    },
+    triggerClose: () => {
+      handleClose(); // Editor 内部の handleClose を経由させる
     }
   }));
 
