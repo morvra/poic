@@ -906,7 +906,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
                 const titleLink = parseTitleAsLink(title);
                 if (titleLink) {
                     return (
-                        
+                        <a
                             href={titleLink.url}
                             target="_blank"
                             rel="noopener noreferrer"

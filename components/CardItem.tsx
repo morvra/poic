@@ -126,7 +126,7 @@ export const CardItem: React.FC<CardItemProps> = ({
                     const titleLink = parseTitleAsLink(card.title);
                     if (titleLink && !isSelectionMode) {
                         return (
-                            
+                            <a
                                 href={titleLink.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
