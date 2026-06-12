@@ -121,36 +121,36 @@ export const CardItem: React.FC<CardItemProps> = ({
                 </h3>
             </div>
             
-          <div className="flex items-center gap-2 shrink-0">
-              {(() => {
-                  const titleLink = parseTitleAsLink(card.title);
-                  if (titleLink && !isSelectionMode) {
-                      return (
-                          
-                              href={titleLink.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-stone-400 hover:text-blue-600 transition-colors"
-                              title={titleLink.url}
-                          >
-                              <Link size={18} />
-                          </a>
-                      );
-                  }
-                  if (isGTD && onToggleComplete && !isSelectionMode) {
-                      return (
-                          <button
-                              onClick={(e) => { e.stopPropagation(); onToggleComplete(card.id); }}
-                              className="text-stone-400 hover:text-green-600 transition-colors"
-                          >
-                              {card.completed ? <CheckCircle size={18} className="text-green-600" /> : <Circle size={18} />}
-                          </button>
-                      );
-                  }
-                  return null;
-              })()}
-          </div>
+            <div className="flex items-center gap-2 shrink-0">
+                {(() => {
+                    const titleLink = parseTitleAsLink(card.title);
+                    if (titleLink && !isSelectionMode) {
+                        return (
+                            
+                                href={titleLink.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-stone-400 hover:text-blue-600 transition-colors"
+                                title={titleLink.url}
+                            >
+                                <Link size={18} />
+                            </a>
+                        );
+                    }
+                    if (isGTD && onToggleComplete && !isSelectionMode) {
+                        return (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onToggleComplete(card.id); }}
+                                className="text-stone-400 hover:text-green-600 transition-colors"
+                            >
+                                {card.completed ? <CheckCircle size={18} className="text-green-600" /> : <Circle size={18} />}
+                            </button>
+                        );
+                    }
+                    return null;
+                })()}
+            </div>
         </div>
 
         {/* Metadata Row */}
