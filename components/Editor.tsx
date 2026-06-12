@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { Card, CardType } from '../types';
-import { formatTimeShort, formatTimestampByPattern } from '../utils';
+import { formatTimeShort, formatTimestampByPattern, parseTitleAsLink } from '../utils';
 import { CardRenderer } from './CardRenderer';
 import { LinkCard } from './LinkCard';
 import { LinkItem } from './LinkItem';
-import { Calendar, Save, X, Trash2, Clock, CheckCircle, Circle, Link as LinkIcon, AlertTriangle, FileText, Lightbulb, CheckSquare, BookOpen, Pin, ArrowRightFromLine } from 'lucide-react';
+import { Calendar, Save, X, Trash2, Clock, CheckCircle, Circle, Link as LinkIcon, AlertTriangle, FileText, Lightbulb, CheckSquare, BookOpen, Pin, ArrowRightFromLine, ExternalLink } from 'lucide-react';
 
 interface EditorProps {
   initialCard?: Card;
@@ -902,15 +902,34 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
                 rows={1}
                 autoFocus={!initialCard?.id && !initialCard?.title}
             />
-            {type === CardType.GTD && (
-                <button
-                    onClick={() => setCompleted(!completed)}
-                    title={completed ? "完了を解除" : "完了にする"}
-                    className={`shrink-0 transition-colors transform active:scale-95 ${completed ? 'text-green-600' : 'text-stone-300 hover:text-green-500'}`}
-                >
-                    {completed ? <CheckCircle size={32} /> : <Circle size={32} />}
-                </button>
-            )}
+            {(() => {
+                const titleLink = parseTitleAsLink(title);
+                if (titleLink) {
+                    return (
+                        
+                            href={titleLink.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 text-stone-300 hover:text-blue-600 transition-colors p-1"
+                            title={titleLink.url}
+                        >
+                            <ExternalLink size={28} />
+                        </a>
+                    );
+                }
+                if (type === CardType.GTD) {
+                    return (
+                        <button
+                            onClick={() => setCompleted(!completed)}
+                            title={completed ? "完了を解除" : "完了にする"}
+                            className={`shrink-0 transition-colors transform active:scale-95 ${completed ? 'text-green-600' : 'text-stone-300 hover:text-green-500'}`}
+                        >
+                            {completed ? <CheckCircle size={32} /> : <Circle size={32} />}
+                        </button>
+                    );
+                }
+                return null;
+            })()}
         </div>
 
         {/* Metadata Inputs */}
