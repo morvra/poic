@@ -86,13 +86,10 @@ export const cleanupDeletedCards = (cards: Card[], retentionDays: number = 30): 
 export type TitleLink = { text: string; url: string } | null;
 
 export const parseTitleAsLink = (title: string): TitleLink => {
-  const mdMatch = title.match(/^\[(.*?)\]\((https?:\/\/[^\)]+)\)$/);
-  if (mdMatch) {
-    return { text: mdMatch[1] || mdMatch[2], url: mdMatch[2] };
-  }
-  const urlMatch = title.match(/^https?:\/\/\S+$/);
+  // タイトル中にURLが含まれていれば抽出
+  const urlMatch = title.match(/https?:\/\/\S+/);
   if (urlMatch) {
-    return { text: title, url: title };
+    return { text: title, url: urlMatch[0] };
   }
   return null;
 };
