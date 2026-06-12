@@ -450,44 +450,23 @@ export default function App() {
     }
   }, [isLoading]); // isLoadingを依存配列に追加
 
-  // import from URL scheme (Cosense-compatible)
-  // 例: https://morvra.github.io/poic/タイトル?body=本文
+  // import from URL scheme (?title=XXX&body=YYY)
   useEffect(() => {
     if (isLoading) return;
 
-    // パスの末尾セグメントをタイトルとして取得
-    // pathname例: /poic/  → セグメントなし（無視）
-    //             /poic/MyTitle → "MyTitle"
-    const pathSegments = window.location.pathname
-      .split('/')
-      .map(s => decodeURIComponent(s))
-      .filter(s => s.length > 0);
-
-    // 最後のセグメントをタイトル候補とする
-    // ただし既知のベースパス（"poic"だけなど）は除外
-    const knownBases = ['poic']; // GitHub Pages のリポジトリ名
-    const candidateTitle = pathSegments[pathSegments.length - 1];
-
-    if (!candidateTitle || knownBases.includes(candidateTitle)) {
-      return; // タイトルに相当するセグメントがない場合は何もしない
-    }
-
     const params = new URLSearchParams(window.location.search);
+    const titleParam = params.get('title');
     const bodyParam = params.get('body') ?? '';
 
-    // URLをすぐにクリーン（リロードで再作成されないように）
-    window.history.replaceState({}, '', window.location.pathname.split('/').slice(0, -1).join('/') || '/');
+    if (!titleParam) return;
 
-    // 同名カードがすでに存在するか確認
-    const existingCard = cards.find(
-      c => !c.isDeleted && c.title === candidateTitle
-    );
+    // すぐにURLをクリーン
+    window.history.replaceState({}, '', window.location.pathname);
 
+    // 同名カードが既存なら開くだけ
+    const existingCard = cards.find(c => !c.isDeleted && c.title === titleParam);
     if (existingCard) {
-      // 既存カードをそのまま開く
-      setTimeout(() => {
-        setActiveModalCardId(existingCard.id);
-      }, 300);
+      setTimeout(() => setActiveModalCardId(existingCard.id), 300);
       return;
     }
 
@@ -495,8 +474,8 @@ export default function App() {
     const newCard: Card = {
       id: generateId(),
       type: CardType.Record,
-      title: candidateTitle,
-      body: decodeURIComponent(bodyParam),
+      title: titleParam,
+      body: bodyParam,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       stacks: [],
@@ -506,15 +485,11 @@ export default function App() {
     };
 
     setCards(prev => [newCard, ...prev]);
-
     setSyncMetadata(prev => ({
       ...prev,
       localChanges: [...new Set([...prev.localChanges, newCard.id])],
     }));
-
-    setTimeout(() => {
-      setActiveModalCardId(newCard.id);
-    }, 300);
+    setTimeout(() => setActiveModalCardId(newCard.id), 300);
   }, [isLoading]);
 
   useEffect(() => {
