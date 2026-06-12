@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Card, CardType, ViewMode, PoicStats, SortOrder } from './types';
 import { generateId, getRelativeDateLabel, formatDate, formatTimestampByPattern, cleanupDeletedCards } from './utils';
-import { uploadToDropbox, downloadFromDropbox, isAuthenticated, isAuthenticatedAsync, logout, initiateAuth, handleAuthCallback, uploadCardToDropbox, deleteCardFromDropbox, permanentlyDeleteCardFromDropbox, renameCardInDropbox } from './utils/dropbox';
+import { uploadToDropbox, downloadFromDropbox, isAuthenticated, isAuthenticatedAsync, logout, initiateAuth, handleAuthCallback, uploadCardToDropbox, deleteCardFromDropbox, permanentlyDeleteCardFromDropbox, renameCardInDropbox, resetDropboxCursor } from './utils/dropbox';
 import type { SyncMetadata } from './types';
 import { idbStorage, migrateFromLocalStorage } from './utils/indexedDB';
 import { CardItem } from './components/CardItem';
@@ -665,36 +665,41 @@ export default function App() {
   };
   
   // --- Dropbox Helpers ---
-  const syncDownload = async (token?: string) => { 
+  const syncDownload = async (forceFullSync: boolean = false) => { 
     setIsSyncing(true); 
     try {
-      const remoteCards = await downloadFromDropbox();
-      
+      if (forceFullSync) {
+        await resetDropboxCursor();
+      }
+
+      const remoteCards = await downloadFromDropbox(forceFullSync);
+      if (remoteCards.length === 0 && !forceFullSync) {
+        console.log('syncDownload: no remote changes');
+        setSyncMetadata(prev => ({ ...prev, lastSyncTime: Date.now() }));
+        return;
+      }
+
       if (remoteCards && Array.isArray(remoteCards)) {
         setCards(prevCards => {
           const mergedMap = new Map<string, Card>();
           
-          // 既存カードをマップに
           prevCards.forEach(c => {
             if (!c.isDeleted) {
               mergedMap.set(c.id, c);
             }
           });
           
-          // リモートのカードをマージ（updatedAtが新しい方を優先）
           remoteCards.forEach((rc: Card) => {
             const local = mergedMap.get(rc.id);
             if (!local) {
               mergedMap.set(rc.id, rc);
             } else {
-              // updatedAtを比較
               const localTime = local.updatedAt;
               const remoteTime = rc.updatedAt;
               
               if (remoteTime > localTime) {
                 mergedMap.set(rc.id, rc);
               } else if (remoteTime < localTime) {
-                // ローカルの方が新しい場合は、Dropboxに再アップロード
                 uploadCardToDropbox(local).catch(err => {
                   console.error('Failed to sync local version to Dropbox:', err);
                 });
@@ -712,7 +717,7 @@ export default function App() {
         localChanges: []
       });
       
-      console.log('Sync download completed');
+      console.log('syncDownload completed');
     } catch (error) { 
       console.error('Dropbox Sync Error:', error); 
       if (error instanceof Error && (error.message.includes('Unauthorized') || error.message.includes('401'))) { 
@@ -729,20 +734,12 @@ export default function App() {
     setIsSyncing(true);
     try {
       console.log(forceFullSync ? 'Full sync started' : 'Manual sync started');
-      
-      // まずリモートからダウンロードして最新状態を取得
-      const remoteCards = await downloadFromDropbox();
-      const remoteCardIds = new Set(remoteCards.map(c => c.id));
-      const localCardIds = new Set(cards.filter(c => !c.isDeleted).map(c => c.id));
-      
+
       if (forceFullSync) {
-        // フル同期: すべてのカード（削除済み含む）をアップロード
         const allCards = cards;
-        
         for (const card of allCards) {
           try {
             if (card.isDeleted) {
-              // 削除済みカードは論理削除としてアップロード
               await deleteCardFromDropbox(card);
             } else {
               await uploadCardToDropbox(card);
@@ -751,84 +748,44 @@ export default function App() {
             console.error(`Failed to upload ${card.id}:`, error);
           }
         }
-      } else {
-        // 差分同期
-        
-        // 1. ローカルにあってリモートにないカードを検出
-        const localOnlyCards = cards.filter(c => 
-          !c.isDeleted && !remoteCardIds.has(c.id)
+        await syncDownload(true);
+        return;
+      }
+
+      // 1. localChanges に記録された変更カードをアップロード
+      if (syncMetadata.localChanges.length > 0) {
+        const changedCards = cards.filter(c =>
+          syncMetadata.localChanges.includes(c.id)
         );
-        
-        // 2. リモートにあってローカルにないカードを検出
-        const remoteOnlyCards = remoteCards.filter(c => 
-          !c.isDeleted && !localCardIds.has(c.id)
-        );
-        
-        // ローカルオンリーのカードをアップロード
-        if (localOnlyCards.length > 0) {
-          for (const card of localOnlyCards) {
-            try {
-              await uploadCardToDropbox(card);
-            } catch (error) {
-              console.error(`Failed to upload ${card.id}:`, error);
-            }
+
+        const deletedCards = changedCards.filter(c => c.isDeleted);
+        for (const card of deletedCards) {
+          try {
+            await deleteCardFromDropbox(card);
+          } catch (error) {
+            console.error(`Failed to upload deleted card ${card.id}:`, error);
           }
         }
-        
-        // リモートオンリーのカードをローカルに追加
-        if (remoteOnlyCards.length > 0) {
-          setCards(prevCards => {
-            const newCards = [...prevCards];
-            remoteOnlyCards.forEach(rc => {
-              newCards.push(rc);
-            });
-            return newCards;
-          });
-        }
-        
-        // 3. 変更されたカードをアップロード
-        if (syncMetadata.localChanges.length > 0) {
-          const changedCards = cards.filter(c => 
-            syncMetadata.localChanges.includes(c.id)
-          );
-          
-          // 削除されたカードは論理削除としてアップロード
-          const deletedCards = changedCards.filter(c => c.isDeleted);
-          for (const card of deletedCards) {
-            try {
-              await deleteCardFromDropbox(card); // 論理削除
-            } catch (error) {
-              console.error(`Failed to upload deleted card ${card.id}:`, error);
-            }
+
+        const activeCards = changedCards.filter(c => !c.isDeleted);
+        for (const card of activeCards) {
+          try {
+            await uploadCardToDropbox(card);
+          } catch (error) {
+            console.error(`Failed to upload card ${card.id}:`, error);
           }
-          
-          // 更新・新規カードをアップロード（ローカルオンリーと重複しないように）
-          const activeCards = changedCards.filter(c => 
-            !c.isDeleted && !localOnlyCards.some(loc => loc.id === c.id)
-          );
-          
-          for (const card of activeCards) {
-            try {
-              await uploadCardToDropbox(card);
-            } catch (error) {
-              console.error(`Failed to upload card ${card.id}:`, error);
-            }
-          }
-        } else if (localOnlyCards.length === 0) {
-          console.log('No local changes to upload');
         }
       }
-      
-      // 最後にもう一度フルダウンロードしてマージ（タイムスタンプベースのマージ）
-      await syncDownload();
-      
-      // 同期完了後、localChangesをクリア
+
+      // 2. デルタダウンロード（cursor以降の変更分のみ取得）
+      await syncDownload(false);
+
       setSyncMetadata(prev => ({
         ...prev,
         lastSyncTime: Date.now(),
         localChanges: []
       }));
-      
+
       console.log('Manual sync completed');
     } catch (error) {
       console.error('Manual sync error:', error);
