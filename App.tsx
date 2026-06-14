@@ -305,21 +305,50 @@ export default function App() {
 
   // モーダルが開いている間、背後のスクロールをロックする
   useEffect(() => {
-    if (activeModalCardId) {
-      // 現在のスクロール位置を保持しつつ、bodyのスクロールを止める
-      const scrollY = mainScrollRef.current?.scrollTop ?? 0;
-      document.body.style.overflow = 'hidden';
-      document.body.style.touchAction = 'none';
+    if (!activeModalCardId) return;
 
-      return () => {
-        document.body.style.overflow = '';
-        document.body.style.touchAction = '';
-        // スクロール位置を復元（mainScrollRef自体はblurされているだけで破棄されていないため通常は不要だが念のため）
-        if (mainScrollRef.current) {
-          mainScrollRef.current.scrollTop = scrollY;
-        }
-      };
-    }
+    const scrollY = mainScrollRef.current?.scrollTop ?? 0;
+
+    const originalStyle = {
+      overflow: document.body.style.overflow,
+      position: document.body.style.position,
+      top: document.body.style.top,
+      left: document.body.style.left,
+      right: document.body.style.right,
+      width: document.body.style.width,
+    };
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = '0';
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+
+    const handleTouchMove = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('.modal-scroll-area')) {
+        return; // モーダル内部はそのまま許可
+      }
+      e.preventDefault();
+    };
+
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+    return () => {
+      document.body.style.overflow = originalStyle.overflow;
+      document.body.style.position = originalStyle.position;
+      document.body.style.top = originalStyle.top;
+      document.body.style.left = originalStyle.left;
+      document.body.style.right = originalStyle.right;
+      document.body.style.width = originalStyle.width;
+
+      document.removeEventListener('touchmove', handleTouchMove);
+
+      if (mainScrollRef.current) {
+        mainScrollRef.current.scrollTop = scrollY;
+      }
+    };
   }, [activeModalCardId]);
 
   // スマホで左端から右スワイプしたらサイドバーを開く

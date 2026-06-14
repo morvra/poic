@@ -925,7 +925,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
           </button>
       </div>
 
-      <div ref={containerRef} className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 pb-20">
+      <div ref={containerRef} className="modal-scroll-area flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 pb-20">
         {/* Type & Date Header */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
             <div className="flex gap-2">
