@@ -303,6 +303,25 @@ export default function App() {
     localStorage.setItem('poic-sort-order', sortOrder);
   }, [sortOrder]);
 
+  // モーダルが開いている間、背後のスクロールをロックする
+  useEffect(() => {
+    if (activeModalCardId) {
+      // 現在のスクロール位置を保持しつつ、bodyのスクロールを止める
+      const scrollY = mainScrollRef.current?.scrollTop ?? 0;
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+
+      return () => {
+        document.body.style.overflow = '';
+        document.body.style.touchAction = '';
+        // スクロール位置を復元（mainScrollRef自体はblurされているだけで破棄されていないため通常は不要だが念のため）
+        if (mainScrollRef.current) {
+          mainScrollRef.current.scrollTop = scrollY;
+        }
+      };
+    }
+  }, [activeModalCardId]);
+
   // スマホで左端から右スワイプしたらサイドバーを開く
   useEffect(() => {
     const EDGE_THRESHOLD = 30;   // 画面左端から何pxまでをスワイプ開始エリアとするか
