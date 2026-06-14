@@ -19,6 +19,7 @@ interface EditorProps {
   onMoveToSide?: () => void;
   backlinks?: Card[];
   onRequestClose?: () => void;
+  onSwipeNavigate?: (direction: 'next' | 'prev') => void;
 }
 export interface EditorHandle {
   flushSave: () => void;
@@ -46,7 +47,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
   onNavigate, 
   onMoveToSide,
   backlinks = [],
-  onRequestClose
+  onRequestClose,
+  onSwipeNavigate
 }, ref) => {
   // state
   const [type, setType] = useState<CardType>(initialCard?.type || CardType.Record);
@@ -178,6 +180,72 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
         containerRef.current.scrollTop = 0;
     }
   }, [initialCard?.id]);
+
+  // 読み取りモード時の左右スワイプでカード送り
+  useEffect(() => {
+    if (!onSwipeNavigate) return;
+
+    const SWIPE_THRESHOLD = 80;   // 横方向の最小移動距離
+    const DIRECTION_RATIO = 1.5;  // 横移動が縦移動の何倍以上ならスワイプとみなすか
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let isTracking = false;
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      // 編集モード中、または候補ドロップダウン表示中は無効
+      if (isEditingBody || showWikiSuggestions || showStackSuggestions) {
+        isTracking = false;
+        return;
+      }
+      const touch = e.touches[0];
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+      isTracking = true;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isTracking) return;
+      // 編集モードに切り替わった場合などは中断
+      if (isEditingBody || showWikiSuggestions || showStackSuggestions) {
+        isTracking = false;
+        return;
+      }
+
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - touchStartX;
+      const deltaY = touch.clientY - touchStartY;
+
+      if (Math.abs(deltaX) < SWIPE_THRESHOLD) return;
+      if (Math.abs(deltaX) < Math.abs(deltaY) * DIRECTION_RATIO) return;
+
+      if (deltaX < 0) {
+        // 左スワイプ → 次のカード
+        onSwipeNavigate('next');
+      } else {
+        // 右スワイプ → 前のカード
+        onSwipeNavigate('prev');
+      }
+      isTracking = false;
+    };
+
+    const handleTouchEnd = () => {
+      isTracking = false;
+    };
+
+    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    container.addEventListener('touchmove', handleTouchMove, { passive: true });
+    container.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [onSwipeNavigate, isEditingBody, showWikiSuggestions, showStackSuggestions, initialCard?.id]);
 
   useEffect(() => {
       const isNewCard = !initialCard || !initialCard.id || initialCard.id.startsWith('new-');

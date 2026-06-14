@@ -303,6 +303,68 @@ export default function App() {
     localStorage.setItem('poic-sort-order', sortOrder);
   }, [sortOrder]);
 
+  // スマホで左端から右スワイプしたらサイドバーを開く
+  useEffect(() => {
+    const EDGE_THRESHOLD = 30;   // 画面左端から何pxまでをスワイプ開始エリアとするか
+    const SWIPE_THRESHOLD = 50;  // 右方向に何px動いたらサイドバーを開くか
+    const VERTICAL_LIMIT = 60;   // 縦方向の動きがこれを超えたらスクロールとみなしキャンセル
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let isTracking = false;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      // md以上(タブレット/PC)では何もしない
+      if (window.innerWidth >= 768) return;
+
+      // モーダルやサイドバーが既に開いている場合は無効
+      if (activeModalCardId || isSidebarOpen) return;
+
+      const touch = e.touches[0];
+      if (touch.clientX <= EDGE_THRESHOLD) {
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+        isTracking = true;
+      } else {
+        isTracking = false;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isTracking) return;
+
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - touchStartX;
+      const deltaY = Math.abs(touch.clientY - touchStartY);
+
+      // 縦方向に大きく動いたらスクロール操作とみなしキャンセル
+      if (deltaY > VERTICAL_LIMIT) {
+        isTracking = false;
+        return;
+      }
+
+      // 右方向への十分なスワイプを検知
+      if (deltaX > SWIPE_THRESHOLD) {
+        setIsSidebarOpen(true);
+        isTracking = false;
+      }
+    };
+
+    const handleTouchEnd = () => {
+      isTracking = false;
+    };
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [activeModalCardId, isSidebarOpen]);
+
   useEffect(() => {
   const initializeData = async () => {
       try {
@@ -562,6 +624,52 @@ export default function App() {
 
       return () => clearTimeout(timeoutId); 
   }, [syncMetadata.localChanges, dropboxToken, isLoading]);
+
+  // j/k/r 移動ロジックを共通関数化（キーボードとスワイプ両方から呼べるようにする）
+  const navigateCard = useCallback((direction: 'next' | 'prev' | 'random') => {
+    const openCardId = activeModalCardId || activeSideCardId;
+    if (!openCardId) return;
+
+    // 新規作成中・phantom カードでは移動しない
+    if (openCardId.startsWith('new-') || openCardId.startsWith('phantom-')) return;
+
+    // 切り替え前に現在の編集内容を強制保存
+    if (activeModalCardId) {
+      modalEditorRef.current?.flushSave();
+    } else {
+      sideEditorRef.current?.flushSave();
+    }
+
+    // 表示順：ピン留め → 通常カード
+    const orderedCards = [...pinnedCards, ...unpinnedCards];
+    const currentIndex = orderedCards.findIndex(c => c.id === openCardId);
+    if (currentIndex === -1) return;
+
+    let nextIndex: number;
+
+    if (direction === 'random') {
+      if (orderedCards.length <= 1) return;
+      const candidates = orderedCards
+        .map((_, i) => i)
+        .filter(i => i !== currentIndex);
+      nextIndex = candidates[Math.floor(Math.random() * candidates.length)];
+    } else {
+      nextIndex =
+        direction === 'next'
+          ? Math.min(currentIndex + 1, orderedCards.length - 1)
+          : Math.max(currentIndex - 1, 0);
+      if (nextIndex === currentIndex) return;
+    }
+
+    const nextCard = orderedCards[nextIndex];
+
+    if (activeModalCardId) {
+      setActiveModalCardId(nextCard.id);
+    } else {
+      setActiveSideCardId(nextCard.id);
+    }
+  }, [activeModalCardId, activeSideCardId, pinnedCards, unpinnedCards]);
+
   useEffect(() => { 
     const handleKeyDown = (e: KeyboardEvent) => { 
       // 編集中（INPUT/TEXTAREA にフォーカスあり）はスキップ
@@ -577,42 +685,12 @@ export default function App() {
 
         e.preventDefault();
 
-        // 切り替え前に現在の編集内容を強制保存
-        if (activeModalCardId) {
-          modalEditorRef.current?.flushSave();
-        } else {
-          sideEditorRef.current?.flushSave();
-        }
-
-        // 表示順：ピン留め → 通常カード
-        const orderedCards = [...pinnedCards, ...unpinnedCards];
-        const currentIndex = orderedCards.findIndex(c => c.id === openCardId);
-        if (currentIndex === -1) return;
-
-        let nextIndex: number;
-
         if (e.key === 'r') {
-          // ランダム移動（現在のカードは除外）
-          if (orderedCards.length <= 1) return;
-          const candidates = orderedCards
-            .map((_, i) => i)
-            .filter(i => i !== currentIndex);
-          nextIndex = candidates[Math.floor(Math.random() * candidates.length)];
+          navigateCard('random');
+        } else if (e.key === 'j') {
+          navigateCard('next');
         } else {
-          // j: 次、k: 前
-          nextIndex =
-            e.key === 'j'
-              ? Math.min(currentIndex + 1, orderedCards.length - 1)
-              : Math.max(currentIndex - 1, 0);
-          if (nextIndex === currentIndex) return;
-        }
-
-        const nextCard = orderedCards[nextIndex];
-
-        if (activeModalCardId) {
-          setActiveModalCardId(nextCard.id);
-        } else {
-          setActiveSideCardId(nextCard.id);
+          navigateCard('prev');
         }
         return;
       }
@@ -648,7 +726,7 @@ export default function App() {
     }; 
     window.addEventListener('keydown', handleKeyDown); 
     return () => window.removeEventListener('keydown', handleKeyDown); 
-  }, [activeModalCardId, activeSideCardId, isDropboxConnected, viewMode, searchQuery, activeStack, activeType, pinnedCards, unpinnedCards]);
+  }, [activeModalCardId, activeSideCardId, isDropboxConnected, viewMode, searchQuery, activeStack, activeType, navigateCard]);
 
   const handleDateFormatChange = (format: string) => {
     setDateFormat(format);
@@ -1191,6 +1269,7 @@ return (
                     backlinks={modalBacklinks} 
                     onMoveToSide={() => handleMoveToSide(activeModalCard.id)}
                     onRequestClose={handleCloseModal}
+                    onSwipeNavigate={(direction) => navigateCard(direction)}
                 />
               </div>
           </div>
@@ -1443,6 +1522,7 @@ return (
                       onDelete={() => handleDeleteCard(activeSideCard.id)}
                       onNavigate={(term, e) => handleLinkClick(term, e)} 
                       backlinks={sideBacklinks}
+                      onSwipeNavigate={(direction) => navigateCard(direction)}
                   />
                 </div>
             </aside>
