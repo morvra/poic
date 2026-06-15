@@ -933,7 +933,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
                 <button
                     key={t}
                     onClick={() => setType(t)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2 ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 ${
                     type === t
                         ? TYPE_COLORS_BG[t] + ' shadow-sm transform scale-105'
                         : 'bg-stone-100 text-stone-400 hover:bg-stone-200'
