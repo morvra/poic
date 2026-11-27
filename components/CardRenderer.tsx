@@ -4,9 +4,10 @@ interface CardRendererProps {
   content: string;
   onLinkClick: (term: string, e?: React.MouseEvent) => void; // Update signature
   className?: string;
+  sizeClassName?: string;
 }
 
-export const CardRenderer: React.FC<CardRendererProps> = ({ content, onLinkClick, className = '' }) => {
+export const CardRenderer: React.FC<CardRendererProps> = ({ content, onLinkClick, className = '', sizeClassName = 'text-[17px] leading-relaxed' }) => {
   // Simple parser for [[WikiLinks]] and URLs
   const renderContent = () => {
     // WikiLinks, Markdown Links [text](url), URLs に対応
@@ -72,7 +73,7 @@ export const CardRenderer: React.FC<CardRendererProps> = ({ content, onLinkClick
   }
 
   return (
-    <div className={`whitespace-pre-wrap font-sans text-[17px] leading-relaxed text-ink/90 ${className}`}>
+    <div className={`whitespace-pre-wrap font-sans text-ink/90 ${sizeClassName} ${className}`}>
       {renderContent()}
     </div>
   );
