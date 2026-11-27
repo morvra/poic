@@ -176,7 +176,7 @@ export const CardItem: React.FC<CardItemProps> = ({
                         onClick={(e) => { e.stopPropagation(); if(onStackClick && !isSelectionMode) onStackClick(stack); }}
                         className={`bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded hover:bg-stone-200 cursor-pointer transition-colors hover:text-stone-700 truncate max-w-[64px] sm:max-w-[120px] ${idx > 0 ? 'hidden sm:block' : ''}`}
                         >
-                        #{stack}
+                        {stack}
                         </button>
                     ))}
                 </div>

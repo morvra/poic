@@ -30,7 +30,9 @@ import {
   Settings,
   CheckCheck,
   Pin,
-  ArrowRightFromLine
+  ArrowRightFromLine,
+  Pencil,
+  Check
 } from 'lucide-react';
 
 // Enhanced initial data with 10 varied cards
@@ -83,6 +85,8 @@ export default function App() {
   
   const [showBatchTagModal, setShowBatchTagModal] = useState(false);
   const [batchTagInput, setBatchTagInput] = useState('');
+  const [renamingStack, setRenamingStack] = useState<string | null>(null);
+  const [renameStackInput, setRenameStackInput] = useState('');
 
   // Editor State
   const [activeModalCardId, setActiveModalCardId] = useState<string | null>(null);
@@ -1202,6 +1206,24 @@ export default function App() {
   const handleBatchAddTag = () => { if (!batchTagInput.trim()) return; const tagToAdd = batchTagInput.trim(); setCards(cards.map(c => { if (selectedCardIds.has(c.id)) { const currentStacks = c.stacks || []; if (!currentStacks.includes(tagToAdd)) { return { ...c, stacks: [...currentStacks, tagToAdd], updatedAt: Date.now() }; } } return c; })); setBatchTagInput(''); };
   const handleBatchRemoveTag = (tag: string) => { setCards(cards.map(c => { if (selectedCardIds.has(c.id)) { const currentStacks = c.stacks || []; if (currentStacks.includes(tag)) { return { ...c, stacks: currentStacks.filter(s => s !== tag), updatedAt: Date.now() }; } } return c; })); };
 
+  const handleRenameStack = (oldName: string) => {
+    const newName = renameStackInput.trim();
+    setRenamingStack(null);
+    if (!newName || newName === oldName) return;
+    const affectedIds = cards.filter(c => !c.isDeleted && c.stacks?.includes(oldName)).map(c => c.id);
+    if (affectedIds.length === 0) return;
+    setCards(cards.map(c => {
+      if (!c.stacks?.includes(oldName)) return c;
+      return { ...c, stacks: Array.from(new Set(c.stacks.map(s => s === oldName ? newName : s))), updatedAt: Date.now() };
+    }));
+    // 同期メタデータに変更を記録（既存タグ名へのリネームは統合として扱う）
+    setSyncMetadata(prev => ({
+      ...prev,
+      localChanges: [...new Set([...prev.localChanges, ...affectedIds])]
+    }));
+    if (activeStack === oldName) setActiveStack(newName);
+  };
+
   const toggleGTDComplete = (id: string) => { 
     setCards(cards.map(c => c.id === id ? { ...c, completed: !c.completed, updatedAt: Date.now() } : c));
     
@@ -1283,7 +1305,7 @@ return (
       
       {isSidebarOpen && <div className="fixed inset-0 bg-black/20 z-40 md:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />}
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} dateFormat={dateFormat} onDateFormatChange={handleDateFormatChange} />
-      {showBatchTagModal && (<div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]"><div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200"><h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2"><Tag size={20} />タグの管理</h3><div className="mb-4"><label className="text-xs font-bold text-stone-400 uppercase block mb-1">タグを追加</label><div className="flex gap-2"><input type="text" className="flex-1 border border-stone-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" placeholder="タグ名を入力" value={batchTagInput} onChange={(e) => setBatchTagInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleBatchAddTag()} /><button onClick={handleBatchAddTag} className="bg-stone-800 text-white px-3 py-1.5 rounded text-sm hover:bg-stone-900 transition-colors">追加</button></div></div><div className="mb-6"><label className="text-xs font-bold text-stone-400 uppercase block mb-2">現在のタグ (クリックして削除)</label><div className="flex flex-wrap gap-2">{commonStacks.map(stack => (<button key={stack} onClick={() => handleBatchRemoveTag(stack)} className="bg-stone-100 text-stone-600 px-2 py-1 rounded text-sm hover:bg-red-100 hover:text-red-600 hover:line-through transition-colors">#{stack}</button>))} {commonStacks.length === 0 && <span className="text-sm text-stone-400 italic">タグなし</span>}</div></div><div className="flex justify-end"><button onClick={() => setShowBatchTagModal(false)} className="px-4 py-2 rounded-md bg-stone-100 text-stone-600 hover:bg-stone-200 font-medium transition-colors">閉じる</button></div></div></div>)}
+      {showBatchTagModal && (<div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]"><div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200"><h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2"><Tag size={20} />タグの管理</h3><div className="mb-4"><label className="text-xs font-bold text-stone-400 uppercase block mb-1">タグを追加</label><div className="flex gap-2"><input type="text" className="flex-1 border border-stone-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" placeholder="タグ名を入力" value={batchTagInput} onChange={(e) => setBatchTagInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleBatchAddTag()} /><button onClick={handleBatchAddTag} className="bg-stone-800 text-white px-3 py-1.5 rounded text-sm hover:bg-stone-900 transition-colors">追加</button></div></div><div className="mb-6"><label className="text-xs font-bold text-stone-400 uppercase block mb-2">現在のタグ (クリックして削除)</label><div className="flex flex-wrap gap-2">{commonStacks.map(stack => (<button key={stack} onClick={() => handleBatchRemoveTag(stack)} className="bg-stone-100 text-stone-600 px-2 py-1 rounded text-sm hover:bg-red-100 hover:text-red-600 hover:line-through transition-colors">{stack}</button>))} {commonStacks.length === 0 && <span className="text-sm text-stone-400 italic">タグなし</span>}</div></div><div className="flex justify-end"><button onClick={() => setShowBatchTagModal(false)} className="px-4 py-2 rounded-md bg-stone-100 text-stone-600 hover:bg-stone-200 font-medium transition-colors">閉じる</button></div></div></div>)}
       {showBatchDeleteConfirm && (<div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-stone-900/20 backdrop-blur-[1px]"><div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full border border-stone-200 animate-in zoom-in-95 duration-200"><div className="flex flex-col items-center text-center gap-3 mb-6"><div className="bg-red-100 p-3 rounded-full text-red-600"><AlertTriangle size={32} /></div><h3 className="text-lg font-bold text-stone-800">カードを削除しますか？</h3><p className="text-sm text-stone-500">{selectedCardIds.size}枚のカードを削除します。この操作は元に戻せません。</p></div><div className="flex gap-3"><button onClick={() => setShowBatchDeleteConfirm(false)} className="flex-1 px-4 py-2 rounded-md bg-stone-100 text-stone-600 hover:bg-stone-200 font-medium transition-colors">キャンセル</button><button onClick={confirmBatchDelete} className="flex-1 px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 font-bold transition-colors shadow-sm">削除する</button></div></div></div>)}
 
       {/* モーダルオーバーレイ - サイドバー+メイン画面（右側カード除く）全体をカバー (z-index 50) */}
@@ -1329,7 +1351,29 @@ return (
             <nav className="flex-1 overflow-y-auto p-4 space-y-6">
                 <div className="space-y-1"><button onClick={() => handleViewChange('All')} className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium transition-colors ${viewMode === 'All' ? 'bg-white shadow-sm text-stone-900 border border-stone-100' : 'text-stone-500 hover:text-stone-900'}`}><Library size={18} /> すべてのカード<span className="ml-auto text-xs text-stone-400">{stats.total}</span></button><button onClick={() => handleViewChange('GTD')} className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium transition-colors ${viewMode === 'GTD' ? 'bg-white shadow-sm text-green-700 border border-green-100' : 'text-stone-500 hover:text-green-700'}`}><CheckSquare size={18} /> GTD タスク<span className="ml-auto text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{stats.gtdActive}</span></button></div>
                 <div className="pt-4 border-t border-stone-200/50"><div className="grid grid-cols-2 gap-2 px-2"><button onClick={() => handleViewChange('Type', CardType.Record)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Record ? 'bg-blue-100 border-blue-300 shadow-inner' : 'bg-blue-50 border-blue-100 hover:bg-blue-100'}`}><div className="text-xl font-bold text-blue-600">{stats.record}</div><div className="text-[10px] uppercase text-blue-400">RECORD</div></button><button onClick={() => handleViewChange('Type', CardType.Discovery)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Discovery ? 'bg-red-100 border-red-300 shadow-inner' : 'bg-red-50 border-red-100 hover:bg-red-100'}`}><div className="text-xl font-bold text-red-600">{stats.discovery}</div><div className="text-[10px] uppercase text-red-400">DISCOVERY</div></button><button onClick={() => handleViewChange('Type', CardType.GTD)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.GTD ? 'bg-green-100 border-green-300 shadow-inner' : 'bg-green-50 border-green-100 hover:bg-green-100'}`}><div className="text-xl font-bold text-green-600">{stats.gtdTotal}</div><div className="text-[10px] uppercase text-green-400">GTD</div></button><button onClick={() => handleViewChange('Type', CardType.Reference)} className={`p-2 rounded text-center border transition-all ${activeType === CardType.Reference ? 'bg-yellow-100 border-yellow-300 shadow-inner' : 'bg-yellow-50 border-yellow-100 hover:bg-yellow-100'}`}><div className="text-xl font-bold text-yellow-600">{stats.reference}</div><div className="text-[10px] uppercase text-yellow-400">REF</div></button></div></div>
-                <div className="pt-2 border-t border-stone-200/50"><h3 className="px-3 text-xs font-bold text-stone-400 uppercase tracking-wider mb-2 flex items-center gap-2 mt-4"><Tag size={12} /> タグ</h3><div className="space-y-1">{allStacks.map(stack => (<button key={stack.name} onClick={() => handleViewChange('Stack', stack.name)} className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors flex justify-between items-center ${activeStack === stack.name ? 'bg-stone-200 text-stone-900 font-medium' : 'text-stone-500 hover:text-stone-800'}`}><span className="truncate">{stack.name}</span><span className="text-xs bg-stone-200/50 px-1.5 py-0.5 rounded-full text-stone-400">{stack.count}</span></button>))}{allStacks.length === 0 && <p className="px-3 text-xs text-stone-300 italic">No tags yet</p>}</div></div>
+                <div className="pt-2 border-t border-stone-200/50"><h3 className="px-3 text-xs font-bold text-stone-400 uppercase tracking-wider mb-2 flex items-center gap-2 mt-4"><Tag size={12} /> タグ</h3><div className="space-y-1">{allStacks.map(stack => (
+                      renamingStack === stack.name ? (
+                        <div key={stack.name} className="flex items-center gap-1 px-2 py-1">
+                          <input
+                            autoFocus
+                            value={renameStackInput}
+                            onChange={(e) => setRenameStackInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleRenameStack(stack.name); if (e.key === 'Escape') setRenamingStack(null); }}
+                            className="flex-1 min-w-0 bg-white border border-stone-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          />
+                          <button onClick={() => handleRenameStack(stack.name)} className="shrink-0 p-1 text-green-600 hover:text-green-700" title="保存"><Check size={16} /></button>
+                          <button onClick={() => setRenamingStack(null)} className="shrink-0 p-1 text-stone-400 hover:text-stone-600" title="キャンセル"><X size={16} /></button>
+                        </div>
+                      ) : (
+                        <div key={stack.name} className={`group flex items-center rounded-md ${activeStack === stack.name ? 'bg-stone-200' : ''}`}>
+                          <button onClick={() => handleViewChange('Stack', stack.name)} className={`flex-1 min-w-0 text-left px-3 py-1.5 text-sm transition-colors flex items-center justify-between ${activeStack === stack.name ? 'text-stone-900 font-medium' : 'text-stone-500 hover:text-stone-800'}`}>
+                            <span className="truncate">{stack.name}</span>
+                            <span className="text-xs bg-stone-200/50 px-1.5 py-0.5 rounded-full text-stone-400 ml-2 shrink-0">{stack.count}</span>
+                          </button>
+                          <button onClick={() => { setRenamingStack(stack.name); setRenameStackInput(stack.name); }} className="shrink-0 mr-1 p-1.5 text-stone-400 hover:text-stone-700 transition-opacity md:opacity-0 md:group-hover:opacity-100" title="タグ名を変更"><Pencil size={14} /></button>
+                        </div>
+                      )
+                    ))}{allStacks.length === 0 && <p className="px-3 text-xs text-stone-300 italic">No tags yet</p>}</div></div>
                 <div className="pt-2 border-t border-stone-200/50"><h3 className="px-3 text-xs font-bold text-stone-400 uppercase tracking-wider mb-2 flex items-center gap-2 mt-4"><Cloud size={12} /> Sync</h3>{isDropboxConnected ? (<div className="px-3 space-y-2"><button onClick={handleDisconnectDropbox} className="w-full bg-blue-100 text-blue-700 text-xs py-2 rounded-md font-bold hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"><Cloud size={14} />{isSyncing ? '同期中...' : 'Dropbox 接続済み'}</button><button onClick={(e) => handleManualSync(e.shiftKey)} disabled={isSyncing}  className="w-full bg-stone-200 text-stone-600 text-xs py-2 rounded-md font-bold hover:bg-stone-300 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"><RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />今すぐ同期</button></div>) : (<div className="px-3"><button onClick={handleConnectDropbox} className="w-full bg-stone-200 text-stone-600 text-xs py-2 rounded-md font-bold hover:bg-stone-300 transition-colors flex items-center justify-center gap-2"><Cloud size={14} />Dropbox に接続</button></div>)}</div>
                 <div className="pt-4 border-t border-stone-200/50"><button onClick={() => setIsSettingsOpen(true)} className="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors"><Settings size={18} />設定</button></div>
             </nav>
