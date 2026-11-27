@@ -116,7 +116,7 @@ export const CardItem: React.FC<CardItemProps> = ({
                     </button>
                 )}
 
-                <h3 className={`font-bold text-ink text-[15px] sm:text-[16px] leading-tight truncate group-hover:text-stone-700 transition-colors ${card.completed ? 'text-stone-400' : ''}`}>
+                <h3 className={`font-bold text-ink text-sm sm:text-[15px] leading-tight truncate group-hover:text-stone-700 transition-colors ${card.completed ? 'text-stone-400' : ''}`}>
                   {card.title}
                 </h3>
             </div>
@@ -183,7 +183,7 @@ export const CardItem: React.FC<CardItemProps> = ({
         {/* Body Preview */}
         <div className="relative">
              <div className="max-h-[7rem] line-clamp-4 font-sans text-sm text-ink/90 leading-relaxed">
-                <CardRenderer content={card.body} onLinkClick={onLinkClick} sizeClassName="text-[13px] leading-[1.6] sm:text-[17px] sm:leading-relaxed" />
+                <CardRenderer content={card.body} onLinkClick={onLinkClick} sizeClassName="text-[13px] leading-[1.6] sm:text-[17px] sm:leading-relaxed" imageClassName="block w-full max-h-20 sm:max-h-28 object-cover rounded-sm my-0.5" />
              </div>
         </div>
       </div>
