@@ -79,12 +79,16 @@ export const CardItem: React.FC<CardItemProps> = ({
     }
   };
 
+  // Markdown画像を含むカードは、一覧では本文を出さず最初の画像だけを表示する
+  const imageMatch = card.body.match(/!\[(.*?)\]\((https?:\/\/[^\)]+)\)/);
+  const previewImage = imageMatch ? { alt: imageMatch[1], url: imageMatch[2] } : null;
+
   return (
     <div
       id={domId}
       onClick={handleClick}
       className={`
-        group relative w-full h-[10.5rem] sm:h-full md:min-h-[12rem] bg-paper rounded-sm border border-t-[4px] ${borderClass}
+        group relative w-full h-48 sm:h-full md:min-h-[13rem] bg-paper rounded-sm border border-t-[4px] ${borderClass}
         shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer
         mb-1 overflow-hidden
         ${isSelected ? 'border-stone-400 bg-stone-50 ring-2 ring-stone-400' : 'border-stone-200'}
@@ -181,11 +185,23 @@ export const CardItem: React.FC<CardItemProps> = ({
         </div>
 
         {/* Body Preview */}
-        <div className="relative">
+        {previewImage ? (
+          <div className="relative flex-1 min-h-0">
+              <img
+                src={previewImage.url}
+                alt={previewImage.alt}
+                title={previewImage.alt || previewImage.url}
+                loading="lazy"
+                className="block w-full h-full object-contain rounded-sm"
+              />
+          </div>
+        ) : (
+          <div className="relative">
              <div className="max-h-[7rem] line-clamp-4 font-sans text-sm text-ink/90 leading-relaxed">
-                <CardRenderer content={card.body} onLinkClick={onLinkClick} sizeClassName="text-[13px] leading-[1.6] sm:text-[17px] sm:leading-relaxed" imageClassName="block w-full max-h-20 sm:max-h-28 object-cover rounded-sm my-0.5" />
+                <CardRenderer content={card.body} onLinkClick={onLinkClick} sizeClassName="text-[13px] leading-[1.6] sm:text-[17px] sm:leading-relaxed" />
              </div>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
