@@ -56,6 +56,19 @@ export const formatTimestampByPattern = (date: Date, pattern: string): string =>
     .replace(/ddd/g, ddd);
 };
 
+// 設定した書式から年（YYYY）を省略した短縮書式を返す（一覧表示用）
+export const shortenDateFormat = (pattern: string): string => {
+  let p = pattern.replace(/YYYY/g, '');
+  p = p.replace(/\s{2,}/g, ' ');
+  p = p.replace(/([\/\-.])\1+/g, '$1');
+  p = p.replace(/([\/\-.])\s/g, ' ');
+  p = p.replace(/\s([\/\-.])/g, ' ');
+  p = p.replace(/^\s*[\/\-.年]\s*/, '');
+  p = p.replace(/\s*[\/\-.]\s*$/, '');
+  p = p.trim();
+  return p || 'MM/DD HH:mm';
+};
+
 // Helper for GTD Due Date (YYYY/MM/DD Sun)
 export const formatDateWithDay = (timestamp: number): string => {
     const date = new Date(timestamp);
