@@ -5,15 +5,32 @@ interface CardRendererProps {
   onLinkClick: (term: string, e?: React.MouseEvent) => void; // Update signature
   className?: string;
   sizeClassName?: string;
+  imageClassName?: string;
 }
 
-export const CardRenderer: React.FC<CardRendererProps> = ({ content, onLinkClick, className = '', sizeClassName = 'text-[17px] leading-relaxed' }) => {
+export const CardRenderer: React.FC<CardRendererProps> = ({ content, onLinkClick, className = '', sizeClassName = 'text-[17px] leading-relaxed', imageClassName = 'block max-w-full max-h-80 object-contain rounded my-1' }) => {
   // Simple parser for [[WikiLinks]] and URLs
   const renderContent = () => {
-    // WikiLinks, Markdown Links [text](url), URLs に対応
-    const parts = content.split(/(\[\[.*?\]\]|\[.*?\]\(https?:\/\/[^\)]+\)|https?:\/\/[^\s]+)/g);
+    // Markdown Images ![alt](url), WikiLinks, Markdown Links [text](url), URLs に対応
+    const parts = content.split(/(!\[.*?\]\(https?:\/\/[^\)]+\)|\[\[.*?\]\]|\[.*?\]\(https?:\/\/[^\)]+\)|https?:\/\/[^\s]+)/g);
 
     return parts.map((part, index) => {
+    // Markdown Image
+    const mdImageMatch = part.match(/^!\[(.*?)\]\((https?:\/\/[^\)]+)\)$/);
+    if (mdImageMatch) {
+      const [, alt, url] = mdImageMatch;
+      return (
+        <img
+          key={index}
+          src={url}
+          alt={alt}
+          title={alt || url}
+          loading="lazy"
+          className={imageClassName}
+        />
+      );
+    }
+
     // Wiki Link
     if (part.startsWith('[[') && part.endsWith(']]')) {
       const term = part.slice(2, -2);
