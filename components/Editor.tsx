@@ -1034,7 +1034,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
                                 onClick={() => selectStackSuggestion(suggestion)}
                                 onMouseEnter={() => setStackSuggestionIndex(idx)}
                             >
-                                #{suggestion}
+                                {suggestion}
                             </div>
                         ))}
                     </div>
