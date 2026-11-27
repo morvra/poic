@@ -84,7 +84,7 @@ export const CardItem: React.FC<CardItemProps> = ({
       id={domId}
       onClick={handleClick}
       className={`
-        group relative w-full h-full md:min-h-[12rem] bg-paper rounded-sm border border-t-[4px] ${borderClass}
+        group relative w-full h-[10.5rem] sm:h-full md:min-h-[12rem] bg-paper rounded-sm border border-t-[4px] ${borderClass}
         shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer
         mb-1 overflow-hidden
         ${isSelected ? 'border-stone-400 bg-stone-50 ring-2 ring-stone-400' : 'border-stone-200'}
@@ -93,15 +93,15 @@ export const CardItem: React.FC<CardItemProps> = ({
     >
       <div className="p-2 flex flex-col h-full">
         {/* Header: Title and Type */}
-        <div className="flex items-center justify-between mb-2 py-1.5 gap-3">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-2 py-1.5 gap-1.5 sm:gap-3">
+            <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
                 {isSelectionMode && (
                   <div className="text-stone-400 mr-1 shrink-0">
                     {isSelected ? <CheckSquare size={20} className="text-blue-600" /> : <Square size={20} />}
                   </div>
                 )}
 
-                <div className={`flex items-center gap-1 shrink-0 ${typeBadgeClass} px-1.5 py-0.5 rounded text-xs font-bold uppercase tracking-wide`}>
+                <div className={`flex items-center gap-1 shrink-0 ${typeBadgeClass} px-1 sm:px-1.5 py-0.5 rounded text-xs font-bold uppercase tracking-wide`}>
                     <TypeIcon type={card.type} />
                     <span className="hidden sm:inline">{SHORT_TYPE_NAMES[card.type]}</span>
                 </div>
@@ -116,7 +116,7 @@ export const CardItem: React.FC<CardItemProps> = ({
                     </button>
                 )}
 
-                <h3 className={`font-bold text-ink text-[16px] leading-tight truncate group-hover:text-stone-700 transition-colors ${card.completed ? 'text-stone-400' : ''}`}>
+                <h3 className={`font-bold text-ink text-[15px] sm:text-[16px] leading-tight truncate group-hover:text-stone-700 transition-colors ${card.completed ? 'text-stone-400' : ''}`}>
                   {card.title}
                 </h3>
             </div>
@@ -154,23 +154,24 @@ export const CardItem: React.FC<CardItemProps> = ({
         </div>
 
         {/* Metadata Row */}
-        <div className="flex flex-wrap items-center gap-3 text-[13px] text-stone-400 font-mono mb-2 leading-none">
-             <span className="flex items-center gap-1">
+        <div className="flex flex-nowrap sm:flex-wrap items-center gap-1.5 sm:gap-3 text-[11px] sm:text-[13px] text-stone-400 font-mono mb-2 leading-none overflow-hidden">
+             <span className="flex items-center gap-1 shrink-0">
                 <Clock size={12} />
-                {formatTimestampByPattern(new Date(displayTimestamp), dateFormat)}
+                <span className="sm:hidden">{formatTimestampByPattern(new Date(displayTimestamp), 'MM/DD HH:mm')}</span>
+                <span className="hidden sm:inline">{formatTimestampByPattern(new Date(displayTimestamp), dateFormat)}</span>
              </span>
              {isGTD && card.dueDate && (
-                <span className={`flex items-center gap-1 ${card.dueDate < Date.now() && !card.completed ? 'text-red-500 font-bold' : ''}`}>
+                <span className={`flex items-center gap-1 whitespace-nowrap ${card.dueDate < Date.now() && !card.completed ? 'text-red-500 font-bold' : ''}`}>
                   Due: {formatDateWithDay(card.dueDate)}
                 </span>
              )}
              {card.stacks && card.stacks.length > 0 && (
-                <div className="flex gap-1 ml-auto">
-                    {card.stacks.map(stack => (
+                <div className="flex gap-1 ml-auto min-w-0">
+                    {card.stacks.map((stack, idx) => (
                         <button 
                         key={stack} 
                         onClick={(e) => { e.stopPropagation(); if(onStackClick && !isSelectionMode) onStackClick(stack); }}
-                        className="bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded hover:bg-stone-200 cursor-pointer transition-colors hover:text-stone-700 truncate max-w-[120px]"
+                        className={`bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded hover:bg-stone-200 cursor-pointer transition-colors hover:text-stone-700 truncate max-w-[64px] sm:max-w-[120px] ${idx > 0 ? 'hidden sm:block' : ''}`}
                         >
                         #{stack}
                         </button>
@@ -182,7 +183,7 @@ export const CardItem: React.FC<CardItemProps> = ({
         {/* Body Preview */}
         <div className="relative">
              <div className="max-h-[7rem] line-clamp-4 font-sans text-sm text-ink/90 leading-relaxed">
-                <CardRenderer content={card.body} onLinkClick={onLinkClick} />
+                <CardRenderer content={card.body} onLinkClick={onLinkClick} sizeClassName="text-[13px] leading-[1.6] sm:text-[17px] sm:leading-relaxed" />
              </div>
         </div>
       </div>
