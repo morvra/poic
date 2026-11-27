@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardType, SortOrder } from '../types';
-import { formatTimestampByPattern, formatDateWithDay, parseTitleAsLink } from '../utils';
+import { formatTimestampByPattern, formatDateWithDay, parseTitleAsLink, shortenDateFormat } from '../utils';
 import { CardRenderer } from './CardRenderer';
 import { Clock, CheckCircle, Circle, FileText, Lightbulb, CheckSquare, BookOpen, Square, Trash2, Pin, Link } from 'lucide-react';
 
@@ -88,7 +88,7 @@ export const CardItem: React.FC<CardItemProps> = ({
       id={domId}
       onClick={handleClick}
       className={`
-        group relative w-full h-48 sm:h-full md:min-h-[13rem] bg-paper rounded-sm border border-t-[4px] ${borderClass}
+        group relative w-full h-48 sm:h-[13rem] bg-paper rounded-sm border border-t-[4px] ${borderClass}
         shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer
         mb-1 overflow-hidden
         ${isSelected ? 'border-stone-400 bg-stone-50 ring-2 ring-stone-400' : 'border-stone-200'}
@@ -161,8 +161,7 @@ export const CardItem: React.FC<CardItemProps> = ({
         <div className="flex flex-nowrap sm:flex-wrap items-center gap-1.5 sm:gap-3 text-[11px] sm:text-[13px] text-stone-400 font-mono mb-2 leading-none overflow-hidden">
              <span className="flex items-center gap-1 shrink-0">
                 <Clock size={12} />
-                <span className="sm:hidden">{formatTimestampByPattern(new Date(displayTimestamp), 'MM/DD HH:mm')}</span>
-                <span className="hidden sm:inline">{formatTimestampByPattern(new Date(displayTimestamp), dateFormat)}</span>
+                {formatTimestampByPattern(new Date(displayTimestamp), shortenDateFormat(dateFormat))}
              </span>
              {isGTD && card.dueDate && (
                 <span className={`flex items-center gap-1 whitespace-nowrap ${card.dueDate < Date.now() && !card.completed ? 'text-red-500 font-bold' : ''}`}>
