@@ -27,6 +27,60 @@ export interface EditorHandle {
   triggerClose: () => void;
 }
 
+// プレビュー上の選択テキストを、元の本文中の範囲に対応付ける（分割アシスト用）
+const findBodyRange = (body: string, selectedText: string): { start: number; end: number } | null => {
+  const needle = selectedText.trim();
+  if (!needle) return null;
+
+  // リンク・画像などの構文内は分割対象にしない
+  const protectedSpans: Array<[number, number]> = [];
+  const syntaxRegex = /\[\[[^\]]*\]\]|!\[[^\]]*\]\([^)]*\)|\[[^\]]*\]\([^)]*\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = syntaxRegex.exec(body)) !== null) {
+    protectedSpans.push([m.index, m.index + m[0].length]);
+  }
+  const overlapsProtected = (start: number, end: number) =>
+    protectedSpans.some(([s, e]) => start < e && end > s);
+
+  // そのまま含まれる場合
+  let from = 0;
+  while (true) {
+    const i = body.indexOf(needle, from);
+    if (i < 0) break;
+    if (!overlapsProtected(i, i + needle.length)) return { start: i, end: i + needle.length };
+    from = i + 1;
+  }
+
+  // 空白の違いを吸収して探す（プレビューの描画では連続空白が畳まれることがある）
+  const normalizeWithMap = (input: string) => {
+    let normalized = '';
+    const map: number[] = [];
+    let prevWasSpace = true;
+    for (let i = 0; i < input.length; i++) {
+      const ch = input[i];
+      if (/\s/.test(ch)) {
+        if (!prevWasSpace) { normalized += ' '; map.push(i); prevWasSpace = true; }
+      } else {
+        normalized += ch; map.push(i); prevWasSpace = false;
+      }
+    }
+    while (normalized.endsWith(' ')) { normalized = normalized.slice(0, -1); map.pop(); }
+    return { normalized, map };
+  };
+  const { normalized: nBody, map } = normalizeWithMap(body);
+  const nNeedle = normalizeWithMap(needle).normalized;
+  if (!nNeedle) return null;
+  let nFrom = 0;
+  while (true) {
+    const idx = nBody.indexOf(nNeedle, nFrom);
+    if (idx < 0) return null;
+    const start = map[idx];
+    const end = map[idx + nNeedle.length - 1] + 1;
+    if (!overlapsProtected(start, end)) return { start, end };
+    nFrom = idx + 1;
+  }
+};
+
 const TypeIcon = ({ type, className }: { type: CardType, className?: string }) => {
     switch (type) {
         case CardType.Record: return <FileText size={16} className={className} />;
@@ -115,6 +169,9 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
   const [selectionRange, setSelectionRange] = useState<{ start: number; end: number } | null>(null);
   const [showSplitForm, setShowSplitForm] = useState(false);
   const [splitTitle, setSplitTitle] = useState('');
+  const [readSelection, setReadSelection] = useState('');
+  const [splitHint, setSplitHint] = useState('');
+  const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null);
 
   // 本文中のリンクを抽出
   const outgoingLinks = useMemo(() => {
@@ -339,6 +396,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
           setCompleted(initialCard.completed || false);
           setIsPinned(initialCard.isPinned);
           setShowDeleteConfirm(false);
+          setSelectionRange(null);
+          setShowSplitForm(false);
+          setReadSelection('');
+          setSplitHint('');
           
           // カーソル位置を復元（編集中のみ）
           if (savedCursorPos !== undefined && isEditingBody && prevId === currentId) {
@@ -440,14 +501,64 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
     }
   };
 
-  const openSplitForm = () => {
-    if (!selectionRange) return;
-    const selected = body.substring(selectionRange.start, selectionRange.end);
+  const openSplitForm = (range: { start: number; end: number }) => {
+    const selected = body.substring(range.start, range.end);
     if (!selected.trim()) return;
     const firstLine = selected.split('\n').map(l => l.trim()).find(l => l.length > 0) || '';
     setSplitTitle(firstLine.slice(0, 80));
     setShowSplitForm(true);
   };
+
+  // 右上の分割ボタン：編集モードでは現在の選択範囲、プレビューでは選択テキストを本文中の範囲に対応付けてから開く
+  const handleSplitButton = () => {
+    if (showSplitForm) { setShowSplitForm(false); return; }
+    if (isEditingBody) {
+      if (selectionRange) openSplitForm(selectionRange);
+      return;
+    }
+    const range = findBodyRange(body, readSelection);
+    if (!range) {
+      setSplitHint('プレビューの選択を本文中で特定できませんでした。編集画面で選択し直してください。');
+      window.setTimeout(() => setSplitHint(''), 4000);
+      return;
+    }
+    pendingSelectionRef.current = range;
+    setSelectionRange(range);
+    setIsEditingBody(true);
+    openSplitForm(range);
+  };
+
+  const canSplit = isEditingBody ? !!selectionRange : readSelection.trim().length > 0;
+
+  // プレビュー表示中は、読み取りビュー内のテキスト選択を追跡する
+  useEffect(() => {
+    if (isEditingBody) { setReadSelection(''); return; }
+    const handler = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !readViewRef.current) { setReadSelection(''); return; }
+      if (sel.anchorNode && readViewRef.current.contains(sel.anchorNode)) {
+        setReadSelection(sel.toString());
+      } else {
+        setReadSelection('');
+      }
+    };
+    document.addEventListener('selectionchange', handler);
+    return () => document.removeEventListener('selectionchange', handler);
+  }, [isEditingBody]);
+
+  // プレビューから編集モードへ移った直後、対応付けた範囲をテキストエリアでも選択する
+  useEffect(() => {
+    if (isEditingBody && pendingSelectionRef.current) {
+      const range = pendingSelectionRef.current;
+      pendingSelectionRef.current = null;
+      requestAnimationFrame(() => {
+        if (bodyRef.current) {
+          bodyRef.current.focus();
+          bodyRef.current.setSelectionRange(range.start, range.end);
+        }
+      });
+    }
+  }, [isEditingBody]);
 
   const handleSplitConfirm = () => {
     if (!selectionRange) return;
@@ -959,6 +1070,14 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
                 <ArrowRightFromLine size={20} />
              </button>
            )}
+           <button
+              onClick={handleSplitButton}
+              disabled={!canSplit && !showSplitForm}
+              className={`p-2 rounded-full transition-colors ${canSplit || showSplitForm ? 'text-stone-400 hover:text-stone-700 hover:bg-stone-100' : 'text-stone-200 cursor-not-allowed'}`}
+              title="選択範囲を別カードにする"
+           >
+              <Scissors size={20} />
+           </button>
            {initialCard?.id && (
              <button
                 onClick={handleDeleteClick}
@@ -979,6 +1098,33 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
               <X size={24} />
           </button>
       </div>
+
+      {/* 分割フォーム（浮動表示：カードの高さを変えない） */}
+      {showSplitForm && (
+          <div className="absolute top-12 right-2 z-20 w-[min(22rem,calc(100vw-2rem))] bg-white border border-stone-200 shadow-xl rounded-md p-2 animate-in zoom-in-95 duration-150">
+              <div className="flex items-center gap-2">
+                  <Scissors size={14} className="text-stone-500 shrink-0" />
+                  <input
+                      autoFocus
+                      value={splitTitle}
+                      onChange={(e) => setSplitTitle(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSplitConfirm(); if (e.key === 'Escape') setShowSplitForm(false); }}
+                      placeholder="新しいカードのタイトル"
+                      className="flex-1 min-w-0 bg-white border border-stone-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+              </div>
+              <p className="text-[11px] text-stone-400 mt-1.5">選択範囲が新しいカードになり、元の場所はリンクに置き換わります</p>
+              <div className="flex justify-end gap-2 mt-2">
+                  <button onClick={() => setShowSplitForm(false)} className="text-xs bg-stone-200 text-stone-600 px-3 py-1.5 rounded hover:bg-stone-300 transition-colors">キャンセル</button>
+                  <button onClick={handleSplitConfirm} className="text-xs bg-stone-800 text-white px-3 py-1.5 rounded hover:bg-stone-900 transition-colors">分割</button>
+              </div>
+          </div>
+      )}
+      {splitHint && !showSplitForm && (
+          <div className="absolute top-12 right-2 z-20 w-[min(22rem,calc(100vw-2rem))] bg-white border border-amber-200 shadow-xl rounded-md px-3 py-2 text-xs text-stone-600 animate-in zoom-in-95 duration-150">
+              {splitHint}
+          </div>
+      )}
 
       <div ref={containerRef} className="modal-scroll-area flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 pb-20">
         {/* Type & Date Header */}
@@ -1101,28 +1247,6 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
         <div className="relative min-h-[150px]">
             {isEditingBody ? (
                 <>
-                    {selectionRange && !showSplitForm && (
-                        <div className="mb-1 flex justify-end">
-                            <button onMouseDown={(e) => e.preventDefault()} onClick={openSplitForm} className="flex items-center gap-1 text-xs bg-stone-800 text-white px-2 py-1 rounded hover:bg-stone-900 transition-colors">
-                                <Scissors size={12} /> 選択範囲を別カードにする
-                            </button>
-                        </div>
-                    )}
-                    {showSplitForm && (
-                        <div className="mb-2 flex items-center gap-2 bg-stone-100 border border-stone-200 rounded-md px-2 py-2">
-                            <Scissors size={14} className="text-stone-500 shrink-0" />
-                            <input
-                                autoFocus
-                                value={splitTitle}
-                                onChange={(e) => setSplitTitle(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') handleSplitConfirm(); if (e.key === 'Escape') setShowSplitForm(false); }}
-                                placeholder="新しいカードのタイトル"
-                                className="flex-1 min-w-0 bg-white border border-stone-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            />
-                            <button onClick={handleSplitConfirm} className="shrink-0 text-xs bg-stone-800 text-white px-2 py-1.5 rounded hover:bg-stone-900 transition-colors">分割</button>
-                            <button onClick={() => setShowSplitForm(false)} className="shrink-0 text-xs bg-stone-200 text-stone-600 px-2 py-1.5 rounded hover:bg-stone-300 transition-colors">キャンセル</button>
-                        </div>
-                    )}
                     <textarea
                         ref={bodyRef}
                         onSelect={handleBodySelect}
