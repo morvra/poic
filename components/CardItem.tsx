@@ -35,13 +35,6 @@ const TYPE_BORDER_COLOR = {
     [CardType.Reference]: 'border-t-yellow-500',
 }
 
-const SHORT_TYPE_NAMES = {
-  [CardType.Record]: 'REC',
-  [CardType.Discovery]: 'DIS',
-  [CardType.GTD]: 'GTD',
-  [CardType.Reference]: 'REF',
-};
-
 const TypeIcon = ({ type, className }: { type: CardType, className?: string }) => {
     switch (type) {
         case CardType.Record: return <FileText size={16} className={className} />;
@@ -105,9 +98,8 @@ export const CardItem: React.FC<CardItemProps> = ({
                   </div>
                 )}
 
-                <div className={`flex items-center gap-1 shrink-0 ${typeBadgeClass} px-1 sm:px-1.5 py-0.5 rounded text-xs font-bold uppercase tracking-wide`}>
+                <div className={`flex items-center shrink-0 ${typeBadgeClass} px-1 sm:px-1.5 py-0.5 rounded`} title={card.type}>
                     <TypeIcon type={card.type} />
-                    <span className="hidden sm:inline">{SHORT_TYPE_NAMES[card.type]}</span>
                 </div>
                 
                 {onTogglePin && !isSelectionMode && card.isPinned && (
