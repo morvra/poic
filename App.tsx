@@ -109,6 +109,7 @@ export default function App() {
   });
   const modalEditorRef = useRef<EditorHandle>(null);
   const sideEditorRef = useRef<EditorHandle>(null);
+  const modalBackdropMouseDownRef = useRef(false);
 
   // --- Memos ---
   const getCardData = (id: string | null): Card | undefined => {
@@ -1333,9 +1334,15 @@ return (
       {activeModalCard && (
           <div 
               className="fixed top-0 bottom-0 left-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-stone-900/20 backdrop-blur-[1px] animate-in fade-in duration-200"
+              onMouseDown={(e) => {
+                // 押下が背景から始まった場合だけ、背景クリックで閉じる対象にする
+                modalBackdropMouseDownRef.current = (e.target === e.currentTarget);
+              }}
               onClick={(e) => {
                 if (e.target === e.currentTarget) {
-                  // テキスト選択中は閉じない（ドラッグ選択の指をカード外で離したときの誤閉じ防止）
+                  // カード内で押し始めたドラッグ（テキスト選択など）は、カード外で離しても閉じない
+                  if (!modalBackdropMouseDownRef.current) return;
+                  // テキスト選択中は閉じない
                   const sel = window.getSelection();
                   if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) return;
                   modalEditorRef.current?.triggerClose() ?? handleCloseModal();
