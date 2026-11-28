@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { Card, CardType } from '../types';
 import { formatTimeShort, formatTimestampByPattern, parseTitleAsLink } from '../utils';
 import { CardRenderer } from './CardRenderer';
@@ -397,6 +397,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
           setIsPinned(initialCard.isPinned);
           setShowDeleteConfirm(false);
           setSelectionRange(null);
+          selectionRangeRef.current = null;
           setShowSplitForm(false);
           setReadSelection('');
           setSplitHint('');
@@ -491,15 +492,36 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
     }, false);
   };
 
-  const handleBodySelect = () => {
+  const selectionRangeRef = useRef<{ start: number; end: number } | null>(null);
+  // テキストエリアの選択範囲を state に同期する。
+  // iOS Safari では textarea の select イベントがタッチ選択で安定して発火しないため、
+  // 複数のイベントと selectionchange から拾う。値が変わったときだけ setState する。
+  const syncSelectionRange = useCallback(() => {
     const ta = bodyRef.current;
     if (!ta) return;
-    if (ta.selectionStart !== ta.selectionEnd) {
-      setSelectionRange({ start: ta.selectionStart, end: ta.selectionEnd });
-    } else {
-      setSelectionRange(null);
+    const s = ta.selectionStart;
+    const e = ta.selectionEnd;
+    const next = (s !== null && e !== null && s !== e) ? { start: s, end: e } : null;
+    const prev = selectionRangeRef.current;
+    if ((prev?.start ?? -1) !== (next?.start ?? -1) || (prev?.end ?? -1) !== (next?.end ?? -1)) {
+      selectionRangeRef.current = next;
+      setSelectionRange(next);
     }
-  };
+  }, []);
+
+  // 編集モード中は selectionchange でも選択を拾う（iOSの選択ハンドルのドラッグ対策）。
+  // 選択が畳まれたときはここでは消さない（右上のボタンをタップする前に選択が解除されても、
+  // state 側の範囲が残っていればボタンが押せるようにするため）。
+  useEffect(() => {
+    if (!isEditingBody) return;
+    const handler = () => {
+      const ta = bodyRef.current;
+      if (!ta || document.activeElement !== ta) return;
+      if (ta.selectionStart !== ta.selectionEnd) syncSelectionRange();
+    };
+    document.addEventListener('selectionchange', handler);
+    return () => document.removeEventListener('selectionchange', handler);
+  }, [isEditingBody, syncSelectionRange]);
 
   const openSplitForm = (range: { start: number; end: number }) => {
     const selected = body.substring(range.start, range.end);
@@ -582,6 +604,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
     setBody(newBody);
     setShowSplitForm(false);
     setSelectionRange(null);
+    selectionRangeRef.current = null;
     // 置換後の本文で元カードを即保存する（新規/ファントムの場合は内部でスキップされ、通常の保存フローに委ねる）
     handleAutoSave(newBody);
     requestAnimationFrame(() => {
@@ -1254,7 +1277,11 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
                 <>
                     <textarea
                         ref={bodyRef}
-                        onSelect={handleBodySelect}
+                        onSelect={syncSelectionRange}
+                        onKeyUp={syncSelectionRange}
+                        onMouseUp={syncSelectionRange}
+                        onTouchEnd={syncSelectionRange}
+                        onClick={syncSelectionRange}
                         className="block w-full min-h-[150px] resize-none border-none focus:outline-none bg-transparent text-[17px] font-sans leading-relaxed text-ink/90 placeholder-stone-300 overflow-hidden"
                         placeholder="内容を入力... (Alt+T: タイムスタンプ, [[ : リンク)"
                         value={body}
