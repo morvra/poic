@@ -174,26 +174,17 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
   const [splitHint, setSplitHint] = useState('');
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null);
 
-  // モバイル判定と、キーボードに隠れないための visualViewport 追跡。
-  // viewportBottom は「キーボードの高さ」として使う（innerHeight - visualViewport.height）。
-  // offsetTop は加えない：iOS では position:fixed の要素は見えている領域（visual viewport）に
-  // 吸着するため、スクロール量まで差し引くとボタンがキーボードの裏に沈んでしまう。
+  // モバイル判定。分割ボタン等のモバイル用浮動要素は、キーボードの高さ計算ではなく
+  // 「選択範囲の画面上の位置」に吸着させる（updateSplitBtnPos）。visualViewport の値は
+  // PWA/WKWebView ではキーボードで変化しないことがあり、当てにならないため。
   const [isNarrow, setIsNarrow] = useState<boolean>(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches);
-  const [viewportBottom, setViewportBottom] = useState(0);
+  const [splitBtnTop, setSplitBtnTop] = useState<number | null>(null);
+  const updateSplitBtnPosRef = useRef<() => void>(() => {});
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 639px)');
     const onChange = (e: MediaQueryListEvent) => setIsNarrow(e.matches);
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
-  }, []);
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const update = () => setViewportBottom(Math.max(0, Math.round(window.innerHeight - vv.height)));
-    update();
-    vv.addEventListener('resize', update);
-    vv.addEventListener('scroll', update);
-    return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update); };
   }, []);
 
   // 本文中のリンクを抽出
@@ -530,6 +521,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
       selectionRangeRef.current = next;
       setSelectionRange(next);
     }
+    updateSplitBtnPosRef.current();
   }, []);
 
   // 編集モード中は selectionchange でも選択を拾う（iOSの選択ハンドルのドラッグ対策）。
@@ -545,6 +537,83 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
     document.addEventListener('selectionchange', handler);
     return () => document.removeEventListener('selectionchange', handler);
   }, [isEditingBody, syncSelectionRange]);
+
+  // テキストエリア内のキャレット位置（画面座標）を、ミラー要素で実測する
+  const getCaretClientRect = (ta: HTMLTextAreaElement, pos: number): { top: number; bottom: number } | null => {
+    const style = window.getComputedStyle(ta);
+    const div = document.createElement('div');
+    const props = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textIndent', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth'] as const;
+    props.forEach(p => { (div.style as any)[p] = (style as any)[p]; });
+    div.style.position = 'absolute';
+    div.style.top = '0';
+    div.style.left = '0';
+    div.style.visibility = 'hidden';
+    div.style.whiteSpace = 'pre-wrap';
+    div.style.wordWrap = 'break-word';
+    div.style.overflowWrap = 'break-word';
+    div.style.boxSizing = 'border-box';
+    div.style.borderStyle = 'solid';
+    div.style.borderColor = 'transparent';
+    div.style.width = `${ta.offsetWidth}px`;
+    div.textContent = ta.value.substring(0, pos);
+    const marker = document.createElement('span');
+    marker.textContent = ta.value.substring(pos, pos + 1) || '.';
+    div.appendChild(marker);
+    document.body.appendChild(div);
+    const markerTop = marker.offsetTop;
+    const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.4;
+    document.body.removeChild(div);
+    const taRect = ta.getBoundingClientRect();
+    const top = taRect.top + markerTop - ta.scrollTop;
+    return { top, bottom: top + lineHeight };
+  };
+
+  // モバイル用浮動要素（分割ボタン・フォーム・ヒント）の縦位置を、選択範囲のすぐ下に合わせる。
+  // 選択範囲は iOS が必ず画面内（キーボードの上）に見えるようスクロールするため、
+  // ここに吸着させればキーボード裏に隠れない。画面下端を超える場合は選択の上に置く。
+  const updateSplitBtnPos = useCallback(() => {
+    if (!isNarrow) { setSplitBtnTop(null); return; }
+    let below: number | null = null;
+    let above: number | null = null;
+    if (isEditingBody) {
+      const ta = bodyRef.current;
+      const range = selectionRangeRef.current;
+      if (ta && range) {
+        const endRect = getCaretClientRect(ta, range.end);
+        if (endRect) below = endRect.bottom + 10;
+        const startRect = getCaretClientRect(ta, range.start);
+        if (startRect) above = startRect.top - 66;
+      }
+    } else {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+        const r = sel.getRangeAt(0).getBoundingClientRect();
+        if (r.width > 0 || r.height > 0) { below = r.bottom + 10; above = r.top - 66; }
+      }
+    }
+    if (below === null) { setSplitBtnTop(null); return; }
+    const top = (below + 56 > window.innerHeight && above !== null && above > 0) ? above : below;
+    setSplitBtnTop(Math.round(top));
+  }, [isNarrow, isEditingBody]);
+
+  useEffect(() => { updateSplitBtnPosRef.current = updateSplitBtnPos; }, [updateSplitBtnPos]);
+
+  // スクロールやキーボード開閉で選択範囲の画面位置が動いたら、浮動要素を追従させる
+  useEffect(() => {
+    if (!isNarrow) return;
+    const onMove = () => updateSplitBtnPos();
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', onMove);
+    vv?.addEventListener('scroll', onMove);
+    return () => {
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+      vv?.removeEventListener('resize', onMove);
+      vv?.removeEventListener('scroll', onMove);
+    };
+  }, [isNarrow, updateSplitBtnPos]);
 
   const openSplitForm = (range: { start: number; end: number }) => {
     const selected = body.substring(range.start, range.end);
@@ -580,16 +649,17 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
     if (isEditingBody) { setReadSelection(''); return; }
     const handler = () => {
       const sel = window.getSelection();
-      if (!sel || sel.isCollapsed || !readViewRef.current) { setReadSelection(''); return; }
+      if (!sel || sel.isCollapsed || !readViewRef.current) { setReadSelection(''); updateSplitBtnPos(); return; }
       if (sel.anchorNode && readViewRef.current.contains(sel.anchorNode)) {
         setReadSelection(sel.toString());
       } else {
         setReadSelection('');
       }
+      updateSplitBtnPos();
     };
     document.addEventListener('selectionchange', handler);
     return () => document.removeEventListener('selectionchange', handler);
-  }, [isEditingBody]);
+  }, [isEditingBody, updateSplitBtnPos]);
 
   // プレビューから編集モードへ移った直後、対応付けた範囲をテキストエリアでも選択する
   useEffect(() => {
@@ -1113,15 +1183,15 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
     </>
   );
   const splitFormEl = !showSplitForm ? null : isNarrow
-    ? createPortal(<div className={splitFormAppearance} style={{ position: 'fixed', left: 8, right: 8, bottom: viewportBottom + 16, zIndex: 60 } as React.CSSProperties}>{splitFormInner}</div>, document.body)
+    ? createPortal(<div className={splitFormAppearance} style={{ position: 'fixed', left: 8, right: 8, top: splitBtnTop ?? 120, zIndex: 60 } as React.CSSProperties}>{splitFormInner}</div>, document.body)
     : <div className={`absolute top-12 right-2 z-20 w-[min(22rem,calc(100vw-2rem))] ${splitFormAppearance}`}>{splitFormInner}</div>;
   const splitHintAppearance = "bg-white border border-amber-200 shadow-xl rounded-md px-3 py-2 text-xs text-stone-600 animate-in zoom-in-95 duration-150";
   const splitHintEl = (!splitHint || showSplitForm) ? null : isNarrow
-    ? createPortal(<div className={splitHintAppearance} style={{ position: 'fixed', left: 8, right: 8, bottom: viewportBottom + 76, zIndex: 60 } as React.CSSProperties}>{splitHint}</div>, document.body)
+    ? createPortal(<div className={splitHintAppearance} style={{ position: 'fixed', left: 8, right: 8, top: splitBtnTop ?? 120, zIndex: 60 } as React.CSSProperties}>{splitHint}</div>, document.body)
     : <div className={`absolute top-12 right-2 z-20 w-[min(22rem,calc(100vw-2rem))] ${splitHintAppearance}`}>{splitHint}</div>;
-  const mobileSplitButtonEl = (isNarrow && canSplit && !showSplitForm)
+  const mobileSplitButtonEl = (isNarrow && canSplit && !showSplitForm && splitBtnTop !== null)
     ? createPortal(
-        <button onClick={handleSplitButton} className="bg-stone-800 text-white p-3.5 rounded-full shadow-2xl flex items-center justify-center active:scale-95 transition-transform" style={{ position: 'fixed', right: 16, bottom: viewportBottom + 16, zIndex: 60 } as React.CSSProperties} title="選択範囲を別カードにする">
+        <button onClick={handleSplitButton} className="bg-stone-800 text-white p-3.5 rounded-full shadow-2xl flex items-center justify-center active:scale-95 transition-transform" style={{ position: 'fixed', right: 16, top: splitBtnTop, zIndex: 60 } as React.CSSProperties} title="選択範囲を別カードにする">
           <Scissors size={22} />
         </button>, document.body)
     : null;
@@ -1410,6 +1480,14 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
                 <div
                     ref={readViewRef}
                     onClick={handleViewModeClick}
+                    onClickCapture={(e) => {
+                        // テキスト選択中は、リンク等のクリック（カード移動）を発火させない
+                        const sel = window.getSelection();
+                        if (sel && !sel.isCollapsed && sel.toString().length > 0) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                        }
+                    }}
                     tabIndex={0}
                     className="w-full min-h-[150px] cursor-text outline-none"
                 >
