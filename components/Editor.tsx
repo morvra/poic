@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useImperativeHandle, forwardRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Card, CardType } from '../types';
 import { formatTimeShort, formatTimestampByPattern, parseTitleAsLink } from '../utils';
 import { CardRenderer } from './CardRenderer';
@@ -172,6 +173,25 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
   const [readSelection, setReadSelection] = useState('');
   const [splitHint, setSplitHint] = useState('');
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null);
+
+  // モバイル判定と、キーボードに隠れないための visualViewport 追跡（画面下端から見えている領域までの距離）
+  const [isNarrow, setIsNarrow] = useState<boolean>(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches);
+  const [viewportBottom, setViewportBottom] = useState(0);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const onChange = (e: MediaQueryListEvent) => setIsNarrow(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setViewportBottom(Math.max(0, Math.round(window.innerHeight - (vv.offsetTop + vv.height))));
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update); };
+  }, []);
 
   // 本文中のリンクを抽出
   const outgoingLinks = useMemo(() => {
@@ -1065,6 +1085,44 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
     [CardType.Reference]: 'border-t-yellow-500',
   };
 
+  // 分割フォーム・ヒント・モバイル用フローティングボタン。
+  // モバイルではカード内の absolute 配置だとキーボードやスクロールで見えなくなるため、
+  // body 直下へのポータルで「見えている領域の下端（＝キーボードの上）」に固定表示する。
+  const splitFormAppearance = "bg-white border border-stone-200 shadow-xl rounded-md p-2 animate-in zoom-in-95 duration-150";
+  const splitFormInner = (
+    <>
+      <div className="flex items-center gap-2">
+          <Scissors size={14} className="text-stone-500 shrink-0" />
+          <input
+              autoFocus
+              value={splitTitle}
+              onChange={(e) => setSplitTitle(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSplitConfirm(); if (e.key === 'Escape') setShowSplitForm(false); }}
+              placeholder="新しいカードのタイトル"
+              className="flex-1 min-w-0 bg-white border border-stone-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+          />
+      </div>
+      <p className="text-[11px] text-stone-400 mt-1.5">選択範囲の1行目がタイトル、2行目以降が本文の新しいカードになり、元の場所はリンクに置き換わります</p>
+      <div className="flex justify-end gap-2 mt-2">
+          <button onClick={() => setShowSplitForm(false)} className="text-xs bg-stone-200 text-stone-600 px-3 py-1.5 rounded hover:bg-stone-300 transition-colors">キャンセル</button>
+          <button onClick={handleSplitConfirm} className="text-xs bg-stone-800 text-white px-3 py-1.5 rounded hover:bg-stone-900 transition-colors">分割</button>
+      </div>
+    </>
+  );
+  const splitFormEl = !showSplitForm ? null : isNarrow
+    ? createPortal(<div className={splitFormAppearance} style={{ position: 'fixed', left: 8, right: 8, bottom: viewportBottom + 16, zIndex: 60 } as React.CSSProperties}>{splitFormInner}</div>, document.body)
+    : <div className={`absolute top-12 right-2 z-20 w-[min(22rem,calc(100vw-2rem))] ${splitFormAppearance}`}>{splitFormInner}</div>;
+  const splitHintAppearance = "bg-white border border-amber-200 shadow-xl rounded-md px-3 py-2 text-xs text-stone-600 animate-in zoom-in-95 duration-150";
+  const splitHintEl = (!splitHint || showSplitForm) ? null : isNarrow
+    ? createPortal(<div className={splitHintAppearance} style={{ position: 'fixed', left: 8, right: 8, bottom: viewportBottom + 76, zIndex: 60 } as React.CSSProperties}>{splitHint}</div>, document.body)
+    : <div className={`absolute top-12 right-2 z-20 w-[min(22rem,calc(100vw-2rem))] ${splitHintAppearance}`}>{splitHint}</div>;
+  const mobileSplitButtonEl = (isNarrow && canSplit && !showSplitForm)
+    ? createPortal(
+        <button onClick={handleSplitButton} className="bg-stone-800 text-white p-3.5 rounded-full shadow-2xl flex items-center justify-center active:scale-95 transition-transform" style={{ position: 'fixed', right: 16, bottom: viewportBottom + 16, zIndex: 60 } as React.CSSProperties} title="選択範囲を別カードにする">
+          <Scissors size={22} />
+        </button>, document.body)
+    : null;
+
   return (
     <div className={`bg-paper w-full max-w-full h-auto max-h-full flex flex-col shadow-none overflow-hidden relative border-t-[8px] ${TYPE_BORDER_COLOR[type]}`}>
       
@@ -1100,7 +1158,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
            {(canSplit || showSplitForm) && (
            <button
               onClick={handleSplitButton}
-              className="p-2 rounded-full transition-colors text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+              className="hidden sm:block p-2 rounded-full transition-colors text-stone-400 hover:text-stone-700 hover:bg-stone-100"
               title="選択範囲を別カードにする"
            >
               <Scissors size={20} />
@@ -1127,32 +1185,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
           </button>
       </div>
 
-      {/* 分割フォーム（浮動表示：カードの高さを変えない） */}
-      {showSplitForm && (
-          <div className="absolute top-12 right-2 z-20 w-[min(22rem,calc(100vw-2rem))] bg-white border border-stone-200 shadow-xl rounded-md p-2 animate-in zoom-in-95 duration-150">
-              <div className="flex items-center gap-2">
-                  <Scissors size={14} className="text-stone-500 shrink-0" />
-                  <input
-                      autoFocus
-                      value={splitTitle}
-                      onChange={(e) => setSplitTitle(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleSplitConfirm(); if (e.key === 'Escape') setShowSplitForm(false); }}
-                      placeholder="新しいカードのタイトル"
-                      className="flex-1 min-w-0 bg-white border border-stone-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  />
-              </div>
-              <p className="text-[11px] text-stone-400 mt-1.5">選択範囲の1行目がタイトル、2行目以降が本文の新しいカードになり、元の場所はリンクに置き換わります</p>
-              <div className="flex justify-end gap-2 mt-2">
-                  <button onClick={() => setShowSplitForm(false)} className="text-xs bg-stone-200 text-stone-600 px-3 py-1.5 rounded hover:bg-stone-300 transition-colors">キャンセル</button>
-                  <button onClick={handleSplitConfirm} className="text-xs bg-stone-800 text-white px-3 py-1.5 rounded hover:bg-stone-900 transition-colors">分割</button>
-              </div>
-          </div>
-      )}
-      {splitHint && !showSplitForm && (
-          <div className="absolute top-12 right-2 z-20 w-[min(22rem,calc(100vw-2rem))] bg-white border border-amber-200 shadow-xl rounded-md px-3 py-2 text-xs text-stone-600 animate-in zoom-in-95 duration-150">
-              {splitHint}
-          </div>
-      )}
+      {/* 分割フォーム・ヒント・モバイル用ボタン（定義は return 直前。モバイルでは body 直下にポータル表示） */}
+      {splitFormEl}
+      {splitHintEl}
+      {mobileSplitButtonEl}
 
       <div ref={containerRef} className="modal-scroll-area flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 pb-20">
         {/* Type & Date Header */}
