@@ -4,7 +4,7 @@ import { formatTimeShort, formatTimestampByPattern, parseTitleAsLink } from '../
 import { CardRenderer } from './CardRenderer';
 import { LinkCard } from './LinkCard';
 import { LinkItem } from './LinkItem';
-import { Calendar, Save, X, Trash2, Clock, CheckCircle, Circle, Link as LinkIcon, AlertTriangle, FileText, Lightbulb, CheckSquare, BookOpen, Pin, ArrowRightFromLine, ExternalLink } from 'lucide-react';
+import { Calendar, Save, X, Trash2, Clock, CheckCircle, Circle, Link as LinkIcon, AlertTriangle, FileText, Lightbulb, CheckSquare, BookOpen, Pin, ArrowRightFromLine, ExternalLink, Scissors } from 'lucide-react';
 
 interface EditorProps {
   initialCard?: Card;
@@ -18,6 +18,7 @@ interface EditorProps {
   onNavigate: (term: string, e?: React.MouseEvent) => void;
   onMoveToSide?: () => void;
   backlinks?: Card[];
+  onCreateLinkedCard?: (data: { title: string; body: string; type: CardType; stacks: string[] }) => void;
   onRequestClose?: () => void;
   onSwipeNavigate?: (direction: 'next' | 'prev') => void;
 }
@@ -47,6 +48,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
   onNavigate, 
   onMoveToSide,
   backlinks = [],
+  onCreateLinkedCard,
   onRequestClose,
   onSwipeNavigate
 }, ref) => {
@@ -108,6 +110,11 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
   const [stackSuggestions, setStackSuggestions] = useState<string[]>([]);
   const [showStackSuggestions, setShowStackSuggestions] = useState(false);
   const [stackSuggestionIndex, setStackSuggestionIndex] = useState(0);
+
+  // カード分割アシスト用：本文の選択範囲と分割フォーム
+  const [selectionRange, setSelectionRange] = useState<{ start: number; end: number } | null>(null);
+  const [showSplitForm, setShowSplitForm] = useState(false);
+  const [splitTitle, setSplitTitle] = useState('');
 
   // 本文中のリンクを抽出
   const outgoingLinks = useMemo(() => {
@@ -364,8 +371,9 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
       };
   }, [title, body, type, dueDate, stacks, createdAt, completed, isPinned]);
 
-  const handleAutoSave = () => {
-    if (!title.trim() && !body.trim()) return;
+  const handleAutoSave = (bodyOverride?: string) => {
+    const effectiveBody = bodyOverride ?? body;
+    if (!title.trim() && !effectiveBody.trim()) return;
     
     const isNewCard = !initialCard?.id || 
                       initialCard.id.startsWith('new-') || 
@@ -390,7 +398,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
         
         const hasChanges = 
             initialCard.title !== title ||
-            initialCard.body !== body ||
+            initialCard.body !== effectiveBody ||
             initialCard.type !== type ||
             initialCard.dueDate !== dueTimestamp ||
             (type === CardType.GTD && initialCard.completed !== completed) ||
@@ -412,7 +420,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
     onSave({
       id: initialCard?.id,
       title,
-      body,
+      body: effectiveBody,
       type,
       dueDate: dueTimestamp,
       stacks: stackList,
@@ -420,6 +428,53 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
       completed: type === CardType.GTD ? completed : false,
       isPinned
     }, false);
+  };
+
+  const handleBodySelect = () => {
+    const ta = bodyRef.current;
+    if (!ta) return;
+    if (ta.selectionStart !== ta.selectionEnd) {
+      setSelectionRange({ start: ta.selectionStart, end: ta.selectionEnd });
+    } else {
+      setSelectionRange(null);
+    }
+  };
+
+  const openSplitForm = () => {
+    if (!selectionRange) return;
+    const selected = body.substring(selectionRange.start, selectionRange.end);
+    if (!selected.trim()) return;
+    const firstLine = selected.split('\n').map(l => l.trim()).find(l => l.length > 0) || '';
+    setSplitTitle(firstLine.slice(0, 80));
+    setShowSplitForm(true);
+  };
+
+  const handleSplitConfirm = () => {
+    if (!selectionRange) return;
+    const titleToUse = splitTitle.trim();
+    if (!titleToUse) return;
+    const selectedText = body.substring(selectionRange.start, selectionRange.end);
+    if (!selectedText.trim()) { setShowSplitForm(false); return; }
+    const stackList = stacks.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    // 同名カードが既にある場合は新規作成せず、リンクへの置換だけを行う
+    const alreadyExists = allCards.some(c => !c.isDeleted && c.title.toLowerCase() === titleToUse.toLowerCase());
+    if (!alreadyExists && onCreateLinkedCard) {
+      onCreateLinkedCard({ title: titleToUse, body: selectedText, type, stacks: stackList });
+    }
+    const linkText = `[[${titleToUse}]]`;
+    const linkStart = selectionRange.start;
+    const newBody = body.substring(0, selectionRange.start) + linkText + body.substring(selectionRange.end);
+    setBody(newBody);
+    setShowSplitForm(false);
+    setSelectionRange(null);
+    // 置換後の本文で元カードを即保存する（新規/ファントムの場合は内部でスキップされ、通常の保存フローに委ねる）
+    handleAutoSave(newBody);
+    requestAnimationFrame(() => {
+      if (bodyRef.current) {
+        const pos = linkStart + linkText.length;
+        bodyRef.current.setSelectionRange(pos, pos);
+      }
+    });
   };
 
   const handleTogglePin = () => {
@@ -1046,8 +1101,31 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
         <div className="relative min-h-[150px]">
             {isEditingBody ? (
                 <>
+                    {selectionRange && !showSplitForm && (
+                        <div className="mb-1 flex justify-end">
+                            <button onMouseDown={(e) => e.preventDefault()} onClick={openSplitForm} className="flex items-center gap-1 text-xs bg-stone-800 text-white px-2 py-1 rounded hover:bg-stone-900 transition-colors">
+                                <Scissors size={12} /> 選択範囲を別カードにする
+                            </button>
+                        </div>
+                    )}
+                    {showSplitForm && (
+                        <div className="mb-2 flex items-center gap-2 bg-stone-100 border border-stone-200 rounded-md px-2 py-2">
+                            <Scissors size={14} className="text-stone-500 shrink-0" />
+                            <input
+                                autoFocus
+                                value={splitTitle}
+                                onChange={(e) => setSplitTitle(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleSplitConfirm(); if (e.key === 'Escape') setShowSplitForm(false); }}
+                                placeholder="新しいカードのタイトル"
+                                className="flex-1 min-w-0 bg-white border border-stone-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            />
+                            <button onClick={handleSplitConfirm} className="shrink-0 text-xs bg-stone-800 text-white px-2 py-1.5 rounded hover:bg-stone-900 transition-colors">分割</button>
+                            <button onClick={() => setShowSplitForm(false)} className="shrink-0 text-xs bg-stone-200 text-stone-600 px-2 py-1.5 rounded hover:bg-stone-300 transition-colors">キャンセル</button>
+                        </div>
+                    )}
                     <textarea
                         ref={bodyRef}
+                        onSelect={handleBodySelect}
                         className="block w-full min-h-[150px] resize-none border-none focus:outline-none bg-transparent text-[17px] font-sans leading-relaxed text-ink/90 placeholder-stone-300 overflow-hidden"
                         placeholder="内容を入力... (Alt+T: タイムスタンプ, [[ : リンク)"
                         value={body}

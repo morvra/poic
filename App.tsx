@@ -1142,6 +1142,27 @@ export default function App() {
       }
   };
 
+  // カード分割アシスト用：選択範囲から新規カードを作成する（タイプとスタックは呼び出し側が引き継ぐ）
+  const handleCreateLinkedCard = (data: { title: string; body: string; type: CardType; stacks: string[] }) => {
+      const newCard: Card = {
+          id: generateId(),
+          type: data.type,
+          title: data.title,
+          body: data.body,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          stacks: data.stacks,
+          isDeleted: false,
+          isPinned: false,
+          completed: false
+      };
+      setCards(prev => [newCard, ...prev]);
+      setSyncMetadata(prev => ({
+          ...prev,
+          localChanges: [...new Set([...prev.localChanges, newCard.id])]
+      }));
+  };
+
   const handleDeleteCard = (id: string) => {
     setCards(cards.map(c => c.id === id ? { ...c, isDeleted: true, deletedAt: Date.now(), updatedAt: Date.now() } : c));
     setSyncMetadata(prev => ({
@@ -1314,6 +1335,9 @@ return (
               className="fixed top-0 bottom-0 left-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-stone-900/20 backdrop-blur-[1px] animate-in fade-in duration-200"
               onClick={(e) => {
                 if (e.target === e.currentTarget) {
+                  // テキスト選択中は閉じない（ドラッグ選択の指をカード外で離したときの誤閉じ防止）
+                  const sel = window.getSelection();
+                  if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) return;
                   modalEditorRef.current?.triggerClose() ?? handleCloseModal();
                 }
               }}
@@ -1337,6 +1361,7 @@ return (
                     onDelete={() => handleDeleteCard(activeModalCard.id)}
                     onNavigate={(term, e) => handleLinkClick(term, e)} 
                     backlinks={modalBacklinks} 
+                    onCreateLinkedCard={handleCreateLinkedCard}
                     onMoveToSide={() => handleMoveToSide(activeModalCard.id)}
                     onRequestClose={handleCloseModal}
                     onSwipeNavigate={(direction) => navigateCard(direction)}
@@ -1616,6 +1641,7 @@ return (
                       onDelete={() => handleDeleteCard(activeSideCard.id)}
                       onNavigate={(term, e) => handleLinkClick(term, e)} 
                       backlinks={sideBacklinks}
+                      onCreateLinkedCard={handleCreateLinkedCard}
                       onSwipeNavigate={(direction) => navigateCard(direction)}
                   />
                 </div>
