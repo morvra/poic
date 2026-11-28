@@ -1306,10 +1306,10 @@ export default function App() {
   const handleViewChange = (mode: ViewMode, value: string | null = null) => { setViewMode(mode); if (mode === 'Stack') { setActiveStack(value); setActiveType(null); } else if (mode === 'Type') { setActiveType(value as CardType); setActiveStack(null); } else { setActiveStack(null); setActiveType(null); } if (window.innerWidth < 768) setIsSidebarOpen(false); };
   
   const gridClasses = (isDesktopSidebarOpen && !sidePanelOpen) 
-    ? "grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-4"
+    ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4"
     : sidePanelOpen
-      ? "grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-4" 
-      : "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4";
+      ? "grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-4" 
+      : "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-4";
 
   if (isLoading) {
     return (

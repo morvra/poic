@@ -81,10 +81,12 @@ export const CardItem: React.FC<CardItemProps> = ({
       id={domId}
       onClick={handleClick}
       className={`
-        group relative w-full h-48 sm:h-[13rem] bg-paper rounded-sm border border-t-[4px] ${borderClass}
-        shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer
+        group relative w-full h-48 bg-paper bg-gradient-to-b from-white via-paper to-paper rounded border border-t-[4px] ${borderClass}
+        shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_1px_2px_rgba(28,25,23,0.08),0_6px_16px_-6px_rgba(28,25,23,0.18),0_16px_32px_-16px_rgba(28,25,23,0.22)]
+        hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_2px_4px_rgba(28,25,23,0.08),0_12px_24px_-8px_rgba(28,25,23,0.22),0_24px_40px_-16px_rgba(28,25,23,0.28)]
+        hover:-translate-y-[2px] transition-all duration-200 cursor-pointer
         mb-1 overflow-hidden
-        ${isSelected ? 'border-stone-400 bg-stone-50 ring-2 ring-stone-400' : 'border-stone-200'}
+        ${isSelected ? 'border-stone-400 bg-stone-50 ring-2 ring-stone-400' : 'border-stone-300/70'}
       `}
       style={style}
     >
@@ -112,7 +114,7 @@ export const CardItem: React.FC<CardItemProps> = ({
                     </button>
                 )}
 
-                <h3 className={`font-bold text-ink text-sm sm:text-[15px] leading-tight truncate group-hover:text-stone-700 transition-colors ${card.completed ? 'text-stone-400' : ''}`}>
+                <h3 className={`font-bold text-ink text-sm leading-tight truncate group-hover:text-stone-700 transition-colors ${card.completed ? 'text-stone-400' : ''}`}>
                   {card.title}
                 </h3>
             </div>
@@ -150,7 +152,7 @@ export const CardItem: React.FC<CardItemProps> = ({
         </div>
 
         {/* Metadata Row */}
-        <div className="flex flex-nowrap sm:flex-wrap items-center gap-1.5 sm:gap-3 text-[11px] sm:text-[13px] text-stone-400 font-mono mb-2 leading-none overflow-hidden">
+        <div className="flex flex-nowrap sm:flex-wrap items-center gap-1.5 sm:gap-3 text-[11px] sm:text-xs text-stone-400 font-mono mb-2 leading-none overflow-hidden">
              <span className="flex items-center gap-1 shrink-0">
                 <Clock size={12} />
                 {formatTimestampByPattern(new Date(displayTimestamp), shortenDateFormat(dateFormat))}
@@ -189,7 +191,7 @@ export const CardItem: React.FC<CardItemProps> = ({
         ) : (
           <div className="relative">
              <div className="max-h-[7rem] line-clamp-4 font-sans text-sm text-ink/90 leading-relaxed">
-                <CardRenderer content={card.body} onLinkClick={onLinkClick} sizeClassName="text-[13px] leading-[1.6] sm:text-[17px] sm:leading-relaxed" />
+                <CardRenderer content={card.body} onLinkClick={onLinkClick} sizeClassName="text-[13px] leading-[1.6] sm:text-[15px] sm:leading-[1.65]" />
              </div>
           </div>
         )}
