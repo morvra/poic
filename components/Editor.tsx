@@ -570,7 +570,11 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
     // 同名カードが既にある場合は新規作成せず、リンクへの置換だけを行う
     const alreadyExists = allCards.some(c => !c.isDeleted && c.title.toLowerCase() === titleToUse.toLowerCase());
     if (!alreadyExists && onCreateLinkedCard) {
-      onCreateLinkedCard({ title: titleToUse, body: selectedText, type, stacks: stackList });
+      // 新規カードの本文は、選択範囲の2行目以降（1行目はタイトルになる）
+      const selLines = selectedText.split('\n');
+      const firstLineIdx = selLines.findIndex(l => l.trim().length > 0);
+      const restBody = firstLineIdx >= 0 ? selLines.slice(firstLineIdx + 1).join('\n').replace(/^\n+/, '').replace(/\n+$/, '') : '';
+      onCreateLinkedCard({ title: titleToUse, body: restBody, type, stacks: stackList });
     }
     const linkText = `[[${titleToUse}]]`;
     const linkStart = selectionRange.start;
@@ -1070,14 +1074,15 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
                 <ArrowRightFromLine size={20} />
              </button>
            )}
+           {(canSplit || showSplitForm) && (
            <button
               onClick={handleSplitButton}
-              disabled={!canSplit && !showSplitForm}
-              className={`p-2 rounded-full transition-colors ${canSplit || showSplitForm ? 'text-stone-400 hover:text-stone-700 hover:bg-stone-100' : 'text-stone-200 cursor-not-allowed'}`}
+              className="p-2 rounded-full transition-colors text-stone-400 hover:text-stone-700 hover:bg-stone-100"
               title="選択範囲を別カードにする"
            >
               <Scissors size={20} />
            </button>
+           )}
            {initialCard?.id && (
              <button
                 onClick={handleDeleteClick}
@@ -1113,7 +1118,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
                       className="flex-1 min-w-0 bg-white border border-stone-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                   />
               </div>
-              <p className="text-[11px] text-stone-400 mt-1.5">選択範囲が新しいカードになり、元の場所はリンクに置き換わります</p>
+              <p className="text-[11px] text-stone-400 mt-1.5">選択範囲の1行目がタイトル、2行目以降が本文の新しいカードになり、元の場所はリンクに置き換わります</p>
               <div className="flex justify-end gap-2 mt-2">
                   <button onClick={() => setShowSplitForm(false)} className="text-xs bg-stone-200 text-stone-600 px-3 py-1.5 rounded hover:bg-stone-300 transition-colors">キャンセル</button>
                   <button onClick={handleSplitConfirm} className="text-xs bg-stone-800 text-white px-3 py-1.5 rounded hover:bg-stone-900 transition-colors">分割</button>
