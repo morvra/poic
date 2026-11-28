@@ -174,7 +174,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
   const [splitHint, setSplitHint] = useState('');
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null);
 
-  // モバイル判定と、キーボードに隠れないための visualViewport 追跡（画面下端から見えている領域までの距離）
+  // モバイル判定と、キーボードに隠れないための visualViewport 追跡。
+  // viewportBottom は「キーボードの高さ」として使う（innerHeight - visualViewport.height）。
+  // offsetTop は加えない：iOS では position:fixed の要素は見えている領域（visual viewport）に
+  // 吸着するため、スクロール量まで差し引くとボタンがキーボードの裏に沈んでしまう。
   const [isNarrow, setIsNarrow] = useState<boolean>(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches);
   const [viewportBottom, setViewportBottom] = useState(0);
   useEffect(() => {
@@ -186,7 +189,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const update = () => setViewportBottom(Math.max(0, Math.round(window.innerHeight - (vv.offsetTop + vv.height))));
+    const update = () => setViewportBottom(Math.max(0, Math.round(window.innerHeight - vv.height)));
     update();
     vv.addEventListener('resize', update);
     vv.addEventListener('scroll', update);
