@@ -1366,11 +1366,13 @@ return (
                         </div>
                       ) : (
                         <div key={stack.name} className={`group flex items-center rounded-md ${activeStack === stack.name ? 'bg-stone-200' : ''}`}>
-                          <button onClick={() => handleViewChange('Stack', stack.name)} className={`flex-1 min-w-0 text-left px-3 py-1.5 text-sm transition-colors flex items-center justify-between ${activeStack === stack.name ? 'text-stone-900 font-medium' : 'text-stone-500 hover:text-stone-800'}`}>
-                            <span className="truncate">{stack.name}</span>
-                            <span className="text-xs bg-stone-200/50 px-1.5 py-0.5 rounded-full text-stone-400 ml-2 shrink-0">{stack.count}</span>
+                          <button onClick={() => handleViewChange('Stack', stack.name)} className={`flex-1 min-w-0 text-left px-3 py-1.5 text-sm transition-colors ${activeStack === stack.name ? 'text-stone-900 font-medium' : 'text-stone-500 hover:text-stone-800'}`}>
+                            <span className="truncate block">{stack.name}</span>
                           </button>
-                          <button onClick={() => { setRenamingStack(stack.name); setRenameStackInput(stack.name); }} className="shrink-0 mr-1 p-1.5 text-stone-400 hover:text-stone-700 transition-opacity md:opacity-0 md:group-hover:opacity-100" title="タグ名を変更"><Pencil size={14} /></button>
+                          <div className="shrink-0 mr-1 flex items-center gap-1 md:grid md:gap-0">
+                            <span className="text-xs bg-stone-200/50 px-1.5 py-0.5 rounded-full text-stone-400 shrink-0 transition-opacity md:col-start-1 md:row-start-1 md:justify-self-end md:group-hover:opacity-0">{stack.count}</span>
+                            <button onClick={() => { setRenamingStack(stack.name); setRenameStackInput(stack.name); }} className="shrink-0 p-1.5 text-stone-400 hover:text-stone-700 transition-opacity md:col-start-1 md:row-start-1 md:justify-self-end md:opacity-0 md:group-hover:opacity-100" title="タグ名を変更"><Pencil size={14} /></button>
+                          </div>
                         </div>
                       )
                     ))}{allStacks.length === 0 && <p className="px-3 text-xs text-stone-300 italic">No tags yet</p>}</div></div>
