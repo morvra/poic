@@ -1114,7 +1114,7 @@ export default function App() {
                   });
               }
 
-              setCards(cards.map(c => {
+              setCards(prevCards => prevCards.map(c => {
                   if (c.id === currentId) {
                       return { ...c, ...cardData, updatedAt: Date.now() } as Card;
                   }
@@ -1128,7 +1128,7 @@ export default function App() {
                   return c;
               }));
           } else {
-              setCards(cards.map(c => c.id === currentId ? { 
+              setCards(prevCards => prevCards.map(c => c.id === currentId ? { 
                   ...c, 
                   ...cardData, 
                   updatedAt: Date.now() 
